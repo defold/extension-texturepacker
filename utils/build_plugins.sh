@@ -4,8 +4,7 @@
 
 set -e
 
-PROJECT=defold-rive
-#BOB=bob.jar
+PROJECT=texturepacker
 DEFAULT_SERVER=https://build-stage.defold.com
 
 if [ "" == "${BOB}" ]; then
@@ -56,18 +55,18 @@ function copy_results() {
         copyfile $path $TARGET_DIR/share
     done
 
-    # Copy the files to the target folder
-    for path in ./build/$platform_ne/$PROJECT/*.dylib; do
-        copyfile $path $TARGET_DIR/lib/$platform_ne
-    done
+    # # Copy the files to the target folder
+    # for path in ./build/$platform_ne/$PROJECT/*.dylib; do
+    #     copyfile $path $TARGET_DIR/lib/$platform_ne
+    # done
 
-    for path in ./build/$platform_ne/$PROJECT/*.so; do
-        copyfile $path $TARGET_DIR/lib/$platform_ne
-    done
+    # for path in ./build/$platform_ne/$PROJECT/*.so; do
+    #     copyfile $path $TARGET_DIR/lib/$platform_ne
+    # done
 
-    for path in ./build/$platform_ne/$PROJECT/*.dll; do
-        copyfile $path $TARGET_DIR/lib/$platform_ne
-    done
+    # for path in ./build/$platform_ne/$PROJECT/*.dll; do
+    #     copyfile $path $TARGET_DIR/lib/$platform_ne
+    # done
 }
 
 function build_plugin() {
