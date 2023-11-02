@@ -4,6 +4,7 @@ syntax = "proto2";
 package dmGameSystemDDF;
 
 import "ddf/ddf_extensions.proto";
+import "gamesys/tile_ddf.proto"; // Playback
 
 option java_package = "com.dynamo.texturepacker.proto";
 option java_outer_classname = "Atlas";
