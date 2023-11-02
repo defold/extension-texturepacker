@@ -1,0 +1,179 @@
+<exporter version="1.0"> <!-- file format version, must be 1.0 -->
+
+    <!-- Identifier for the exporter - should be unique.
+         This value is stored when the exporter is referenced from a saved file (.tps).
+         It is also used to select the exporter from command line.
+         Change this if you've duplicated an existing exporter -->
+    <name>defoldexporter</name>
+
+    <!-- Name of the exporter that is shown in the framework selector dialog -->
+    <!-- Change this if you duplicated an existing exporter -->
+    <displayName>DefoldExporter</displayName>
+
+    <!-- A description of the exporter -->
+    <description>TexturePacker to Defold exporter</description>
+
+    <!-- Exporter version -->
+    <version>1.0</version>
+
+    <files>
+
+        <!-- A list of data files which should be generated during the publish process -->
+        <file>
+
+            <!-- name of this file type; used in the tps file
+                 and by the commandline client: for each MYDATA file
+                 a commandline option "- -MYDATA-file" is evaluated
+                 (remark: write the option without the blank between the "-" signs,
+                 it's required in the XML comment)  -->
+            <name>defold</name>
+
+            <!-- human-readable name (used in the TexturePacker GUI) -->
+            <displayName>DefoldAtlas</displayName>
+
+            <!-- file extension, without '.' -->
+            <fileExtension>tpatlas</fileExtension>
+
+            <!-- description what the file contains,
+                 used for tooltips in the GUI (optional) -->
+            <description>A .tpatlas file, in protobuf format. See tpatlas.proto.</description>
+
+            <!-- name of the template file -->
+            <template>defold.tpatlas</template>
+
+            <!-- this file is optional, i.e. if the user does not specify an
+                 output file name, the file will not be generated;
+                 (optional, default is 'false') -->
+            <optional>false</optional>
+
+            <!-- specifies for which scaling variant this data file is generated:
+                 all:   for each variant  (default)
+                 first: only for the first variant
+                 last:  only for the last one   -->
+            <hasSeparateAutoSDFiles>all</hasSeparateAutoSDFiles>
+
+            <!-- create a file for each multipack sheet
+                 (optional, default is 'true') -->
+            <hasSeparateMultiPackFiles>false</hasSeparateMultiPackFiles>
+
+        </file>
+
+        <!-- add more <file> ... </file> tags if you need more than one output file -->
+    </files>
+
+    <!-- the following elements show/hide the corresponding input fields -->
+    <!-- in the TexturePacker user interface -->
+
+    <!-- mandatory flags: -->
+
+    <!-- Set this to true if the target framework supports trimmed sprites (sprites with
+         transparency removed). TexturePacker delivers the offsets and size of the
+         trimmed sprite to the template system. The user can still choose to disable
+         trimming from the user interface. If supportsTrimming is set to false the option
+         to enable trimming is not available in the user interface. -->
+    <supportsTrimming>true</supportsTrimming>
+
+    <!-- Set this to true if the target framework supports rotated sprites. The user can
+         still decide not to enable rotated sprites from the user interface.
+         If supportsRotation is set to false the option to enable sprite rotation is
+         not available in the user interface. -->
+    <supportsRotation>true</supportsRotation>
+
+    <!-- The direction in which a sprite is rotated - if TexturePacker decides
+         to rotate a sprite:
+             cw:  clockwise rotation
+             ccw: counterclockwise rotation
+         The amount of rotation is always 90°. Only required for supportsRotation=true -->
+    <rotationDirection>ccw</rotationDirection>
+
+    <!-- If enabled TexturePacker allows the user to choose non-power-of-2 sizes for sprite
+         sheets. Otherwise, only power-of-2 (POT) sizes are enabled in the user interface. -->
+    <supportsNPOT>false</supportsNPOT>
+
+    <!-- the following flags are optional: -->
+
+    <!-- framework supports tightly packed textures, i.e. it can extract sprites
+         from a sheet using polygon paths instead of bounding boxes (default=false) -->
+    <supportsPolygonPacking>true</supportsPolygonPacking>
+
+    <!-- target framework supports pivot point settings (default=false) -->
+    <supportsPivotPoint>false</supportsPivotPoint>
+
+    <!-- target framework accepts sprite names without file name extension. (default=false) -->
+    <supportsTrimSpriteNames>false</supportsTrimSpriteNames>
+
+    <!-- framework can read in border values for 9-patch scaling of sprites (default=false) -->
+    <supportsScale9>false</supportsScale9>
+
+    <!-- enables the "Auto-detect animations" checkbox in the UI; the implementation of
+         an animation detection must be done by the exporter (default=false) -->
+    <supportsAnimations>false</supportsAnimations>
+
+    <!-- origin of the coordinate system of a sprite in the target framework,
+         needed for pivot point placement. (default=TopLeft) -->
+    <spriteOrigin>TopLeft</spriteOrigin> <!-- TopLeft or BottomLeft -->
+
+    <!-- ensure that width/height of generated texture is multiple of this factor (default=1) -->
+    <textureSizeFactor>1</textureSizeFactor>
+
+    <!-- ensures that the center offset caused by trimming has integral
+         coordinates (default=false)-->
+    <ensureIntegerCenterOffset>false</ensureIntegerCenterOffset>
+
+    <!-- You can specify default values for the following TexturePacker settings.
+         They are used if a new project is created or if the data format of
+         an existing project is changed and "Update to recommended values"
+         is checked. The complete <defaults> block is optional. -->
+    <defaults>
+        <extrude>0</extrude>
+        <shapePadding>1</shapePadding>
+        <borderPadding>1</borderPadding>
+        <trimMode>Polygon</trimMode>               <!-- None, Trim, Crop, CropKeepPos, Polygon -->
+        <sizeConstraints>POT</sizeConstraints>     <!-- POT, WordAligned, AnySize -->
+        <writePivotPoints>trufalsee</writePivotPoints>  <!-- true, false -->
+        <defaultPivotPoint>0.0,0.0</defaultPivotPoint>
+    </defaults>
+
+    <!-- TexturePacker's "scaling variants" dialog provides a set of presets.
+         These presets can be overwritten by exporter-specific ones.
+         You can define them with an optional <variantPresets> block as shown here: -->
+    <variantPresets>
+        <variantPreset>
+            <name>HD / SD</name>
+            <variant>
+                <scale>1.0</scale>
+                <extension>-2x</extension>
+                <filter></filter>    <!-- optional -->
+            </variant>
+            <variant>
+                <scale>0.5</scale>
+                <extension></extension>
+                <filter></filter>
+            </variant>
+            <forceIdenticalLayout>true</forceIdenticalLayout>
+        </variantPreset>
+    </variantPresets>
+
+    <!-- The following <properties> block shows how to define custom exporter properties.
+         For each property TexturePacker displays an input field in the UI.
+         The values entered there are stored in the TPS file and passed to the
+         exporter when publishing. There they can be used in the template file. -->
+    <properties>
+        <property>
+            <!-- Property name, used in tps file + exporter template: -->
+            <name>sprite-prefix</name>
+            <!-- Property type, supported values: string, bool -->
+            <type>string</type>
+            <!-- Default value for new projects -->
+            <default>img_</default>
+            <!-- Name and tooltip text used for the input field in the UI: -->
+            <displayName>Sprite prefix</displayName>
+            <toolTip>Prefix for the sprite's name.</toolTip>
+            <!-- Only displayed if advanced settings are expanded (small triangle
+                 in front of Data settings) -->
+            <isAdvanced>true</isAdvanced>
+        </property>
+        <!-- more <property>s can be defined here -->
+    </properties>
+
+</exporter>

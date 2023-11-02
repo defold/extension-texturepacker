@@ -124,7 +124,7 @@
             <key>data</key>
             <struct type="DataFile">
                 <key>name</key>
-                <filename>basic-{n}.tpjson</filename>
+                <filename>../../../tp/basic/basic-{n}.json</filename>
             </struct>
         </map>
         <key>multiPackMode</key>
@@ -173,10 +173,12 @@
         </struct>
         <key>individualSpriteSettings</key>
         <map type="IndividualSpriteSettingsMap">
-            <key type="filename">../../../../../../../notwork/jcash/atlaspacker/examples/basic/box_fill_128.png</key>
-            <key type="filename">../../../../../../../notwork/jcash/atlaspacker/examples/basic/circle_fill_128.png</key>
-            <key type="filename">../../../../../../../notwork/jcash/atlaspacker/examples/basic/shape_L_128.png</key>
-            <key type="filename">../../../../../../../notwork/jcash/atlaspacker/examples/basic/triangle_fill_128.png</key>
+            <key type="filename">original/anim/box-0.png</key>
+            <key type="filename">original/anim/box-1.png</key>
+            <key type="filename">original/anim/box-2.png</key>
+            <key type="filename">original/box_fill_64.png</key>
+            <key type="filename">original/circle_fill_64.png</key>
+            <key type="filename">original/triangle_fill_64.png</key>
             <struct type="IndividualSpriteSettings">
                 <key>pivotPoint</key>
                 <point_f>0.5,0.5</point_f>
@@ -185,15 +187,16 @@
                 <key>scale9Enabled</key>
                 <false/>
                 <key>scale9Borders</key>
-                <rect>32,32,64,64</rect>
+                <rect>16,16,32,32</rect>
                 <key>scale9Paddings</key>
-                <rect>32,32,64,64</rect>
+                <rect>16,16,32,32</rect>
                 <key>scale9FromFile</key>
                 <false/>
             </struct>
-            <key type="filename">../../../../../../../notwork/jcash/atlaspacker/examples/basic/box_fill_64.png</key>
-            <key type="filename">../../../../../../../notwork/jcash/atlaspacker/examples/basic/circle_fill_64.png</key>
-            <key type="filename">../../../../../../../notwork/jcash/atlaspacker/examples/basic/triangle_fill_64.png</key>
+            <key type="filename">original/box_fill_128.png</key>
+            <key type="filename">original/circle_fill_128.png</key>
+            <key type="filename">original/shape_L_128.png</key>
+            <key type="filename">original/triangle_fill_128.png</key>
             <struct type="IndividualSpriteSettings">
                 <key>pivotPoint</key>
                 <point_f>0.5,0.5</point_f>
@@ -202,9 +205,9 @@
                 <key>scale9Enabled</key>
                 <false/>
                 <key>scale9Borders</key>
-                <rect>16,16,32,32</rect>
+                <rect>32,32,64,64</rect>
                 <key>scale9Paddings</key>
-                <rect>16,16,32,32</rect>
+                <rect>32,32,64,64</rect>
                 <key>scale9FromFile</key>
                 <false/>
             </struct>
@@ -215,13 +218,7 @@
             <struct type="SpriteSheet">
                 <key>files</key>
                 <array>
-                    <filename>../../../../../../../notwork/jcash/atlaspacker/examples/basic/box_fill_128.png</filename>
-                    <filename>../../../../../../../notwork/jcash/atlaspacker/examples/basic/box_fill_64.png</filename>
-                    <filename>../../../../../../../notwork/jcash/atlaspacker/examples/basic/circle_fill_128.png</filename>
-                    <filename>../../../../../../../notwork/jcash/atlaspacker/examples/basic/circle_fill_64.png</filename>
-                    <filename>../../../../../../../notwork/jcash/atlaspacker/examples/basic/shape_L_128.png</filename>
-                    <filename>../../../../../../../notwork/jcash/atlaspacker/examples/basic/triangle_fill_128.png</filename>
-                    <filename>../../../../../../../notwork/jcash/atlaspacker/examples/basic/triangle_fill_64.png</filename>
+                    <filename>original</filename>
                 </array>
             </struct>
         </map>
