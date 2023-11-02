@@ -1,0 +1,17 @@
+/.internal
+/build
+.externalToolBuilders
+.DS_Store
+Thumbs.db
+.lock-wscript
+*.pyc
+.project
+.cproject
+builtins
+/utils/rive-cpp/build
+/utils/rive-cpp/rive-cpp*
+/utils/rive-cpp/earcut*
+/utils/rive-cpp/libtess2*
+/utils/rive-cpp/*.zip
+/bundle*
+bob.jar

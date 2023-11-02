@@ -1,0 +1,116 @@
+- name: rive
+  type: table
+  desc: Functions and constants for interacting with Rive models
+
+  members:
+
+  - name: play_anim
+    type: function
+    desc: Plays the specified animation on a Rive model
+
+    parameters:
+      - name: url
+        type: url
+        desc: The Rive model for which to play an animation
+
+      - name: anim_id
+        type: hash
+        desc: Id of the animation to play
+
+      - name: playback
+        type: number
+        desc: Playback mode of the animation (from go.PLAYBACK_*)
+
+      - name: options
+        type: table
+        desc: Playback options
+        parameters:
+          - name: offset
+            type: number
+            desc: The normalized initial value of the animation cursor when the animation starts playing
+
+          - name: playback_rate
+            type: constant
+            desc: The rate with which the animation will be played. Must be positive.
+
+      - name: complete_function
+        type: function
+        desc: function to call when the animation has completed
+        parameters:
+          - name: self
+            type: object
+            desc: The context of the calling script
+
+          - name: message_id
+            type: hash
+            desc: The name of the completion message ("rive_animation_done")
+
+          - name: message
+            type: table
+            desc: A table that contains the response
+            parameters:
+              - name: animation_id
+                type: hash
+                desc: the animation that was completed
+
+              - name: playback
+                type: constant
+                desc: the playback mode for the animation
+
+          - name: sender
+            type: url
+            desc: The invoker of the callback - the Rive model component
+
+#*****************************************************************************************************
+
+  - name: play_state_machine
+    type: function
+    desc: Plays the specified animation on a Rive model
+
+    parameters:
+      - name: url
+        type: url
+        desc: The Rive model for which to play an animation
+
+      - name: state_machine_id
+        type: hash
+        desc: Id of the state machine to play
+
+      - name: options
+        type: table
+        desc: Playback options
+        parameters:
+          - name: playback_rate
+            type: constant
+            desc: The rate with which the animation will be played. Must be positive.
+
+#*****************************************************************************************************
+
+  - name: cancel
+    type: function
+    desc: Cancels all running animations on a specified spine model component
+
+    parameters:
+      - name: url
+        type: url
+        desc: The Rive model for which to cancel the animation
+
+#*****************************************************************************************************
+
+  - name: get_go
+    type: function
+    desc: Returns the id of the game object that corresponds to a specified skeleton bone.
+
+    parameters:
+      - name: url
+        type: url
+        desc: The Rive model to query
+
+      - name: bone_id
+        type: hash
+        desc: Id of the corresponding bone
+
+    return:
+      - name: id
+        type: hash
+        desc: Id of the game object
