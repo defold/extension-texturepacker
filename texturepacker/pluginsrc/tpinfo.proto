@@ -1,0 +1,71 @@
+// Copied from atlas_ddf.proto and modified to remove things that don't apply here
+
+syntax = "proto2";
+package dmGameSystemDDF;
+
+import "ddf/ddf_extensions.proto";
+
+option java_package = "com.dynamo.texturepacker.proto";
+option java_outer_classname = "Atlas";
+
+message Point
+{
+    required float x = 1;
+    required float y = 2;
+}
+
+message Size
+{
+    required float width = 1;
+    required float height = 2;
+}
+
+message Rect
+{
+    required float x = 1;
+    required float y = 2;
+    required float width = 3;
+    required float height = 4;
+}
+
+message Sprite
+{
+    required string name = 1;
+    required bool   trimmed = 2;    // If the new rectangle is smaller than the source rect
+    required bool   rotated = 3;    // True if it has been rotated 90 deg ccw
+    required bool   is_solid = 4;   // true if there are no transparent texels
+
+    required Size   untrimmed_size = 4; // size of the original image
+    required Point  corner_offset = 5;  // offset from topleft corner to the trimmed rectangle
+    required Rect   source_rect = 6;    // the trimmed rectangle within the original image
+    required Rect   frame_rect = 7;     // The final placement in the texture
+
+    repeated Point  vertices = 8;
+}
+
+message Page
+{
+    required string name = 1;
+    repeated Sprite sprites = 2;
+}
+
+// message AtlasAnimation
+// {
+//     required string id              = 1;
+//     repeated AtlasImage images    = 2;
+//     optional Playback playback      = 3 [default = PLAYBACK_ONCE_FORWARD];
+//     optional uint32 fps             = 4 [default = 30];
+//     optional uint32 flip_horizontal = 5 [default = 0];
+//     optional uint32 flip_vertical   = 6 [default = 0];
+// }
+
+// // Editor format. Engine format is iun texture_set_ddf.proto
+// message AtlasDesc
+// {
+//     required string file                = 1 [(resource) = true];
+//     // A list of comma separated patterns to rename animations: E.g. "_nrm=,_normal="
+//     optional string rename_patterns     = 2;
+
+//     repeated AtlasImage images          = 3;
+//     repeated AtlasAnimation animations  = 4;
+// }
