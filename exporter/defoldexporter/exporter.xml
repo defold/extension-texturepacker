@@ -126,8 +126,8 @@
          is checked. The complete <defaults> block is optional. -->
     <defaults>
         <extrude>0</extrude>
-        <shapePadding>1</shapePadding>
-        <borderPadding>1</borderPadding>
+        <shapePadding>0</shapePadding>
+        <borderPadding>0</borderPadding>
         <trimMode>Polygon</trimMode>               <!-- None, Trim, Crop, CropKeepPos, Polygon -->
         <sizeConstraints>POT</sizeConstraints>     <!-- POT, WordAligned, AnySize -->
         <writePivotPoints>trufalsee</writePivotPoints>  <!-- true, false -->
@@ -159,20 +159,6 @@
          The values entered there are stored in the TPS file and passed to the
          exporter when publishing. There they can be used in the template file. -->
     <properties>
-        <property>
-            <!-- Property name, used in tps file + exporter template: -->
-            <name>sprite-prefix</name>
-            <!-- Property type, supported values: string, bool -->
-            <type>string</type>
-            <!-- Default value for new projects -->
-            <default>img_</default>
-            <!-- Name and tooltip text used for the input field in the UI: -->
-            <displayName>Sprite prefix</displayName>
-            <toolTip>Prefix for the sprite's name.</toolTip>
-            <!-- Only displayed if advanced settings are expanded (small triangle
-                 in front of Data settings) -->
-            <isAdvanced>true</isAdvanced>
-        </property>
         <!-- more <property>s can be defined here -->
     </properties>
 

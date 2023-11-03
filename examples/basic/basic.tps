@@ -4,7 +4,7 @@
         <key>fileFormatVersion</key>
         <int>6</int>
         <key>texturePackerVersion</key>
-        <string>7.0.3</string>
+        <string>7.1.0</string>
         <key>autoSDSettings</key>
         <array>
             <struct type="AutoSDSettings">
@@ -32,7 +32,7 @@
         <key>dpi</key>
         <uint>72</uint>
         <key>dataFormat</key>
-        <string>json-array</string>
+        <string>defoldexporter</string>
         <key>textureFileName</key>
         <filename></filename>
         <key>flipPVR</key>
@@ -64,7 +64,7 @@
             </struct>
         </struct>
         <key>shapePadding</key>
-        <uint>0</uint>
+        <uint>1</uint>
         <key>jpgQuality</key>
         <uint>80</uint>
         <key>pngOptimizationLevel</key>
@@ -76,7 +76,7 @@
         <key>textureFormat</key>
         <enum type="SettingsBase::TextureFormat">png</enum>
         <key>borderPadding</key>
-        <uint>0</uint>
+        <uint>1</uint>
         <key>maxTextureSize</key>
         <QSize>
             <key>width</key>
@@ -98,7 +98,7 @@
             <key>freeSizeMode</key>
             <enum type="AlgorithmSettings::AlgorithmFreeSizeMode">Best</enum>
             <key>sizeConstraints</key>
-            <enum type="AlgorithmSettings::SizeConstraints">AnySize</enum>
+            <enum type="AlgorithmSettings::SizeConstraints">POT</enum>
             <key>forceSquared</key>
             <false/>
             <key>maxRects</key>
@@ -121,10 +121,10 @@
         </struct>
         <key>dataFileNames</key>
         <map type="GFileNameMap">
-            <key>data</key>
+            <key>defold</key>
             <struct type="DataFile">
                 <key>name</key>
-                <filename>../../../tp/basic/basic-{n}.json</filename>
+                <filename>basic.tpatlas</filename>
             </struct>
         </map>
         <key>multiPackMode</key>
@@ -155,33 +155,30 @@
             <key>scaleMode</key>
             <enum type="ScaleMode">Smooth</enum>
             <key>extrude</key>
-            <uint>1</uint>
+            <uint>0</uint>
             <key>trimThreshold</key>
             <uint>1</uint>
             <key>trimMargin</key>
             <uint>1</uint>
             <key>trimMode</key>
-            <enum type="SpriteSettings::TrimMode">Trim</enum>
+            <enum type="SpriteSettings::TrimMode">Polygon</enum>
             <key>tracerTolerance</key>
             <int>200</int>
             <key>heuristicMask</key>
             <false/>
             <key>defaultPivotPoint</key>
-            <point_f>0.5,0.5</point_f>
+            <point_f>0,0</point_f>
             <key>writePivotPoints</key>
             <false/>
         </struct>
         <key>individualSpriteSettings</key>
         <map type="IndividualSpriteSettingsMap">
-            <key type="filename">original/anim/box-0.png</key>
-            <key type="filename">original/anim/box-1.png</key>
-            <key type="filename">original/anim/box-2.png</key>
-            <key type="filename">original/box_fill_64.png</key>
-            <key type="filename">original/circle_fill_64.png</key>
-            <key type="filename">original/triangle_fill_64.png</key>
+            <key type="filename">original/anim/test-0.png</key>
+            <key type="filename">original/anim/test-1.png</key>
+            <key type="filename">original/anim/test-2.png</key>
             <struct type="IndividualSpriteSettings">
                 <key>pivotPoint</key>
-                <point_f>0.5,0.5</point_f>
+                <point_f>0,0</point_f>
                 <key>spriteScale</key>
                 <double>1</double>
                 <key>scale9Enabled</key>
@@ -200,6 +197,38 @@
             <struct type="IndividualSpriteSettings">
                 <key>pivotPoint</key>
                 <point_f>0.5,0.5</point_f>
+                <key>spriteScale</key>
+                <double>1</double>
+                <key>scale9Enabled</key>
+                <false/>
+                <key>scale9Borders</key>
+                <rect>32,32,64,64</rect>
+                <key>scale9Paddings</key>
+                <rect>32,32,64,64</rect>
+                <key>scale9FromFile</key>
+                <false/>
+            </struct>
+            <key type="filename">original/box_fill_64.png</key>
+            <key type="filename">original/circle_fill_64.png</key>
+            <key type="filename">original/triangle_fill_64.png</key>
+            <struct type="IndividualSpriteSettings">
+                <key>pivotPoint</key>
+                <point_f>0.5,0.5</point_f>
+                <key>spriteScale</key>
+                <double>1</double>
+                <key>scale9Enabled</key>
+                <false/>
+                <key>scale9Borders</key>
+                <rect>16,16,32,32</rect>
+                <key>scale9Paddings</key>
+                <rect>16,16,32,32</rect>
+                <key>scale9FromFile</key>
+                <false/>
+            </struct>
+            <key type="filename">original/box_small_128.png</key>
+            <struct type="IndividualSpriteSettings">
+                <key>pivotPoint</key>
+                <point_f>0,0</point_f>
                 <key>spriteScale</key>
                 <double>1</double>
                 <key>scale9Enabled</key>
@@ -243,6 +272,44 @@
         <key>normalMapSheetFileName</key>
         <filename></filename>
         <key>exporterProperties</key>
-        <map type="ExporterProperties"/>
+        <map type="ExporterProperties">
+            <key>defoldexporter::animations_flip</key>
+            <struct type="ExporterProperty">
+                <key>value</key>
+                <string></string>
+            </struct>
+            <key>defoldexporter::animations_fps</key>
+            <struct type="ExporterProperty">
+                <key>value</key>
+                <string>24</string>
+            </struct>
+            <key>defoldexporter::animations_playback</key>
+            <struct type="ExporterProperty">
+                <key>value</key>
+                <string>once_forward</string>
+            </struct>
+            <key>defoldexporter::animations_trim</key>
+            <struct type="ExporterProperty">
+                <key>value</key>
+                <string>off</string>
+            </struct>
+            <key>defoldexporter::assets_path</key>
+            <struct type="ExporterProperty">
+                <key>value</key>
+                <string>assets/{atlas_name}/{animation_name}</string>
+            </struct>
+            <key>defoldexporter::extrude_borders</key>
+            <key>defoldexporter::inner_padding</key>
+            <key>defoldexporter::margin</key>
+            <struct type="ExporterProperty">
+                <key>value</key>
+                <string>0</string>
+            </struct>
+            <key>defoldexporter::sprite-prefix</key>
+            <struct type="ExporterProperty">
+                <key>value</key>
+                <string>img_</string>
+            </struct>
+        </map>
     </struct>
 </data>

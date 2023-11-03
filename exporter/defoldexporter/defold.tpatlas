@@ -1,1 +1,1 @@
-{% load defold %}{% autoescape off %}{{tp|ExportData}}{% endautoescape %}
+{% load defoldscript %}{% autoescape off %}{{tp|ExportData}}{% endautoescape %}

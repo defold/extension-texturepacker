@@ -1,0 +1,577 @@
+// Exported by Defold Exporter
+// For documentation of the fields: https://www.codeandweb.com/texturepacker/documentation/custom-exporter#sprite-type
+
+pages {
+  name: "basic-0.png"
+  sprites {
+    name: "box_fill_128"
+    trimmed: false
+    rotated: false
+    is_solid: true
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 128
+      height: 128
+    }
+    frameRect {
+      x: 1
+      y: 1
+      width: 128
+      height: 128
+    }
+    untrimmedSize {
+      width: 128
+      height: 128
+    }
+    vertices {
+      x: 128
+      y: 128
+    }
+    vertices {
+      x: 0
+      y: 128
+    }
+    vertices {
+      x: 0
+      y: 0
+    }
+    vertices {
+      x: 128
+      y: 0
+    }
+  }
+  sprites {
+    name: "box_small_128"
+    trimmed: true
+    rotated: false
+    is_solid: false
+    centerOffset {
+      x: 36
+      y: -25.5
+    }
+    cornerOffset {
+      x: 79
+      y: 57
+    }
+    sourceRect {
+      x: 79
+      y: 57
+      width: 42
+      height: 65
+    }
+    frameRect {
+      x: 1
+      y: 130
+      width: 42
+      height: 65
+    }
+    untrimmedSize {
+      width: 128
+      height: 128
+    }
+    vertices {
+      x: 121
+      y: 122
+    }
+    vertices {
+      x: 79
+      y: 122
+    }
+    vertices {
+      x: 79
+      y: 57
+    }
+    vertices {
+      x: 121
+      y: 57
+    }
+  }
+  sprites {
+    name: "anim/test-0"
+    trimmed: false
+    rotated: false
+    is_solid: true
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 64
+      height: 64
+    }
+    frameRect {
+      x: 44
+      y: 130
+      width: 64
+      height: 64
+    }
+    untrimmedSize {
+      width: 64
+      height: 64
+    }
+    vertices {
+      x: 64
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 0
+    }
+    vertices {
+      x: 64
+      y: 0
+    }
+  }
+  sprites {
+    name: "box_fill_64"
+    trimmed: false
+    rotated: false
+    is_solid: true
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 64
+      height: 64
+    }
+    frameRect {
+      x: 44
+      y: 130
+      width: 64
+      height: 64
+    }
+    untrimmedSize {
+      width: 64
+      height: 64
+    }
+    vertices {
+      x: 64
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 0
+    }
+    vertices {
+      x: 64
+      y: 0
+    }
+  }
+  sprites {
+    name: "anim/test-1"
+    trimmed: false
+    rotated: false
+    is_solid: false
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 64
+      height: 64
+    }
+    frameRect {
+      x: 109
+      y: 130
+      width: 64
+      height: 64
+    }
+    untrimmedSize {
+      width: 64
+      height: 64
+    }
+    vertices {
+      x: 64
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 0
+    }
+    vertices {
+      x: 64
+      y: 0
+    }
+  }
+  sprites {
+    name: "circle_fill_64"
+    trimmed: false
+    rotated: false
+    is_solid: false
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 64
+      height: 64
+    }
+    frameRect {
+      x: 109
+      y: 130
+      width: 64
+      height: 64
+    }
+    untrimmedSize {
+      width: 64
+      height: 64
+    }
+    vertices {
+      x: 64
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 0
+    }
+    vertices {
+      x: 64
+      y: 0
+    }
+  }
+  sprites {
+    name: "anim/test-2"
+    trimmed: false
+    rotated: false
+    is_solid: false
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 64
+      height: 64
+    }
+    frameRect {
+      x: 174
+      y: 1
+      width: 64
+      height: 64
+    }
+    untrimmedSize {
+      width: 64
+      height: 64
+    }
+    vertices {
+      x: 64
+      y: 58
+    }
+    vertices {
+      x: 64
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 57
+    }
+    vertices {
+      x: 28
+      y: 1
+    }
+    vertices {
+      x: 29
+      y: 0
+    }
+    vertices {
+      x: 35
+      y: 0
+    }
+  }
+  sprites {
+    name: "triangle_fill_64"
+    trimmed: false
+    rotated: false
+    is_solid: false
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 64
+      height: 64
+    }
+    frameRect {
+      x: 174
+      y: 1
+      width: 64
+      height: 64
+    }
+    untrimmedSize {
+      width: 64
+      height: 64
+    }
+    vertices {
+      x: 64
+      y: 58
+    }
+    vertices {
+      x: 64
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 64
+    }
+    vertices {
+      x: 0
+      y: 57
+    }
+    vertices {
+      x: 28
+      y: 1
+    }
+    vertices {
+      x: 29
+      y: 0
+    }
+    vertices {
+      x: 35
+      y: 0
+    }
+  }
+}
+pages {
+  name: "basic-1.png"
+  sprites {
+    name: "circle_fill_128"
+    trimmed: false
+    rotated: false
+    is_solid: false
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 128
+      height: 128
+    }
+    frameRect {
+      x: 1
+      y: 1
+      width: 128
+      height: 128
+    }
+    untrimmedSize {
+      width: 128
+      height: 128
+    }
+    vertices {
+      x: 128
+      y: 19
+    }
+    vertices {
+      x: 128
+      y: 110
+    }
+    vertices {
+      x: 83
+      y: 128
+    }
+    vertices {
+      x: 34
+      y: 128
+    }
+    vertices {
+      x: 0
+      y: 94
+    }
+    vertices {
+      x: 0
+      y: 24
+    }
+    vertices {
+      x: 37
+      y: 0
+    }
+    vertices {
+      x: 85
+      y: 0
+    }
+  }
+}
+pages {
+  name: "basic-2.png"
+  sprites {
+    name: "shape_L_128"
+    trimmed: false
+    rotated: false
+    is_solid: false
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 128
+      height: 128
+    }
+    frameRect {
+      x: 1
+      y: 1
+      width: 128
+      height: 128
+    }
+    untrimmedSize {
+      width: 128
+      height: 128
+    }
+    vertices {
+      x: 17
+      y: 114
+    }
+    vertices {
+      x: 128
+      y: 114
+    }
+    vertices {
+      x: 128
+      y: 128
+    }
+    vertices {
+      x: 0
+      y: 128
+    }
+    vertices {
+      x: 0
+      y: 0
+    }
+    vertices {
+      x: 15
+      y: 0
+    }
+  }
+}
+pages {
+  name: "basic-3.png"
+  sprites {
+    name: "triangle_fill_128"
+    trimmed: false
+    rotated: false
+    is_solid: false
+    centerOffset {
+      x: 0
+      y: 0
+    }
+    cornerOffset {
+      x: 0
+      y: 0
+    }
+    sourceRect {
+      x: 0
+      y: 0
+      width: 128
+      height: 128
+    }
+    frameRect {
+      x: 1
+      y: 1
+      width: 128
+      height: 128
+    }
+    untrimmedSize {
+      width: 128
+      height: 128
+    }
+    vertices {
+      x: 128
+      y: 122
+    }
+    vertices {
+      x: 128
+      y: 128
+    }
+    vertices {
+      x: 0
+      y: 128
+    }
+    vertices {
+      x: 0
+      y: 120
+    }
+    vertices {
+      x: 60
+      y: 0
+    }
+    vertices {
+      x: 67
+      y: 0
+    }
+  }
+}
