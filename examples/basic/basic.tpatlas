@@ -8,10 +8,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: true
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -54,10 +50,6 @@ pages {
     trimmed: true
     rotated: false
     is_solid: false
-    centerOffset {
-      x: 36
-      y: -25.5
-    }
     cornerOffset {
       x: 79
       y: 57
@@ -100,10 +92,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: true
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -146,10 +134,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: true
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -192,10 +176,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: false
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -238,10 +218,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: false
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -284,10 +260,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: false
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -342,10 +314,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: false
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -403,10 +371,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: false
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -468,10 +432,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: false
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
@@ -525,10 +485,6 @@ pages {
     trimmed: false
     rotated: false
     is_solid: false
-    centerOffset {
-      x: 0
-      y: 0
-    }
     cornerOffset {
       x: 0
       y: 0
