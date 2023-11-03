@@ -3,10 +3,8 @@
 syntax = "proto2";
 package dmGameSystemDDF;
 
-import "ddf/ddf_extensions.proto";
-
 option java_package = "com.dynamo.texturepacker.proto";
-option java_outer_classname = "Atlas";
+option java_outer_classname = "Info";
 
 message Point
 {
@@ -35,18 +33,23 @@ message Sprite
     required bool   rotated = 3;    // True if it has been rotated 90 deg ccw
     required bool   is_solid = 4;   // true if there are no transparent texels
 
-    required Size   untrimmed_size = 4; // size of the original image
-    required Point  corner_offset = 5;  // offset from topleft corner to the trimmed rectangle
-    required Rect   source_rect = 6;    // the trimmed rectangle within the original image
-    required Rect   frame_rect = 7;     // The final placement in the texture
+    required Size   untrimmed_size = 5; // size of the original image
+    required Point  corner_offset = 6;  // offset from topleft corner to the trimmed rectangle
+    required Rect   source_rect = 7;    // the trimmed rectangle within the original image
+    required Rect   frame_rect = 8;     // The final placement in the texture
 
-    repeated Point  vertices = 8;
+    repeated Point  vertices = 9;
 }
 
 message Page
 {
     required string name = 1;
     repeated Sprite sprites = 2;
+}
+
+message Atlas
+{
+    repeated Page pages = 1;
 }
 
 // message AtlasAnimation

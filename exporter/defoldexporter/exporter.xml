@@ -32,14 +32,14 @@
             <displayName>DefoldAtlas</displayName>
 
             <!-- file extension, without '.' -->
-            <fileExtension>tpatlas</fileExtension>
+            <fileExtension>tpinfo</fileExtension>
 
             <!-- description what the file contains,
                  used for tooltips in the GUI (optional) -->
-            <description>A .tpatlas file, in protobuf format. See tpatlas.proto.</description>
+            <description>A .tpinfo file, in protobuf format. See tpinfo.proto.</description>
 
             <!-- name of the template file -->
-            <template>defold.tpatlas</template>
+            <template>defold.tpinfo</template>
 
             <!-- this file is optional, i.e. if the user does not specify an
                  output file name, the file will not be generated;

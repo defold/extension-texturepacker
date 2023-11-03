@@ -3,7 +3,7 @@
 set -e
 
 LIBNAME=TexturePackerExt
-CLASS_NAME=com.dynamo.bob.pipeline.TPAtlas
+CLASS_NAME=com.dynamo.bob.pipeline.Atlas
 JAR=./texturepacker/plugins/share/plugin${LIBNAME}.jar
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )

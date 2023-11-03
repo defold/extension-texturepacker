@@ -17,7 +17,7 @@ import com.dynamo.texturepacker.proto.Atlas.AtlasDesc;
 
 @ProtoParams(srcClass = AtlasDesc.class, messageClass = AtlasDesc.class)
 @BuilderParams(name="TexturePackerAtlas", inExts=".tpatlas", outExt=".tpatlasc")
-public class TPAtlasBuilder extends Builder<Void> {
+public class AtlasBuilder extends Builder<Void> {
 
     @Override
     public Task<Void> create(IResource input) throws IOException, CompileExceptionError {

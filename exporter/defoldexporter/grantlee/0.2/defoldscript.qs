@@ -92,8 +92,8 @@ var exportAtlas = function(root)
 {
 	let output = [];
 	output.push(
-		"// Exported by Defold Exporter",
-		"// For documentation of the fields: https://www.codeandweb.com/texturepacker/documentation/custom-exporter#sprite-type",
+		"# Exported by Defold Exporter",
+		"# For documentation of the fields: https://www.codeandweb.com/texturepacker/documentation/custom-exporter#sprite-type",
 		""
 	);
 

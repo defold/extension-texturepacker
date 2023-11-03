@@ -124,7 +124,7 @@
             <key>defold</key>
             <struct type="DataFile">
                 <key>name</key>
-                <filename>basic.tpatlas</filename>
+                <filename>basic.tpinfo</filename>
             </struct>
         </map>
         <key>multiPackMode</key>
