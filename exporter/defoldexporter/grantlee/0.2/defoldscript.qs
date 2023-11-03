@@ -59,10 +59,10 @@ var exportSprite = function(output, indentLevel, sprite)
 	)
 
 	//exportPoint(output, indentLevel+1, "centerOffset", sprite.centerOffset); // don't think we need this one
-	exportPoint(output, indentLevel+1, "cornerOffset", sprite.cornerOffset);
-	exportRect(output, indentLevel+1, "sourceRect", sprite.sourceRect);
-	exportRect(output, indentLevel+1, "frameRect", sprite.frameRect);
-	exportSize(output, indentLevel+1, "untrimmedSize", sprite.untrimmedSize);
+	exportPoint(output, indentLevel+1, "corner_offset", sprite.cornerOffset);
+	exportRect(output, indentLevel+1, "source_rect", sprite.sourceRect);
+	exportRect(output, indentLevel+1, "frame_rect", sprite.frameRect);
+	exportSize(output, indentLevel+1, "untrimmed_size", sprite.untrimmedSize);
 
 	for (let i = 0; i < sprite.vertices.length; ++i) {
 		let vertex = sprite.vertices[i];
