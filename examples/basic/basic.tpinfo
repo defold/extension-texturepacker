@@ -44,6 +44,7 @@ pages {
       x: 128
       y: 0
     }
+    indices: [1, 2, 3, 0, 1, 3]
   }
   sprites {
     name: "box_small_128"
@@ -86,6 +87,7 @@ pages {
       x: 121
       y: 57
     }
+    indices: [1, 2, 3, 0, 1, 3]
   }
   sprites {
     name: "anim/test-0"
@@ -128,6 +130,7 @@ pages {
       x: 64
       y: 0
     }
+    indices: [1, 2, 3, 0, 1, 3]
   }
   sprites {
     name: "box_fill_64"
@@ -170,6 +173,7 @@ pages {
       x: 64
       y: 0
     }
+    indices: [1, 2, 3, 0, 1, 3]
   }
   sprites {
     name: "anim/test-1"
@@ -212,6 +216,7 @@ pages {
       x: 64
       y: 0
     }
+    indices: [1, 2, 3, 0, 1, 3]
   }
   sprites {
     name: "circle_fill_64"
@@ -254,6 +259,7 @@ pages {
       x: 64
       y: 0
     }
+    indices: [1, 2, 3, 0, 1, 3]
   }
   sprites {
     name: "anim/test-2"
@@ -308,6 +314,7 @@ pages {
       x: 35
       y: 0
     }
+    indices: [4, 5, 6, 0, 4, 6, 2, 0, 1, 2, 3, 0, 0, 3, 4]
   }
   sprites {
     name: "triangle_fill_64"
@@ -362,6 +369,7 @@ pages {
       x: 35
       y: 0
     }
+    indices: [4, 5, 6, 0, 4, 6, 2, 0, 1, 2, 3, 0, 0, 3, 4]
   }
 }
 pages {
@@ -423,6 +431,7 @@ pages {
       x: 85
       y: 0
     }
+    indices: [2, 6, 7, 4, 5, 6, 2, 4, 6, 2, 3, 4, 0, 1, 2, 0, 2, 7]
   }
 }
 pages {
@@ -476,6 +485,7 @@ pages {
       x: 15
       y: 0
     }
+    indices: [0, 4, 5, 0, 1, 2, 0, 2, 3, 0, 3, 4]
   }
 }
 pages {
@@ -529,5 +539,6 @@ pages {
       x: 67
       y: 0
     }
+    indices: [3, 4, 5, 2, 0, 1, 2, 3, 0, 0, 3, 5]
   }
 }

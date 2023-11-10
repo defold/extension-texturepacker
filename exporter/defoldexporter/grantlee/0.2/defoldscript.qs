@@ -47,6 +47,21 @@ var exportPoint = function(output, indentLevel, fieldName, vertex)
 	);
 }
 
+var exportIntArray = function(output, indentLevel, fieldName, arr)
+{
+	let s = indent(indentLevel) + fieldName + ": [";
+
+	for (let i = 0; i < arr.length; ++i) {
+		s += arr[i];
+		if (i < arr.length-1)
+		{
+			s += ", ";
+		}
+	}
+
+	output.push(s + "]");
+}
+
 // https://www.codeandweb.com/texturepacker/documentation/custom-exporter#sprite-type
 var exportSprite = function(output, indentLevel, sprite)
 {
@@ -69,7 +84,9 @@ var exportSprite = function(output, indentLevel, sprite)
 		exportPoint(output, indentLevel+1, "vertices", vertex);
 	}
 
-	output.push(indent(indentLevel) + "}")
+	exportIntArray(output, indentLevel+1, "indices", sprite.triangleIndices);
+
+	output.push(indent(indentLevel) + "}");
 }
 
 var exportPage = function(output, indentLevel, texture)
