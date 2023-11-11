@@ -97,6 +97,8 @@ var exportPage = function(output, indentLevel, texture)
 		field("name", texture.fullName, indentLevel+1, true),
 	);
 
+	exportSize(output, indentLevel+1, "size", texture.size);
+
     for (let i = 0; i < texture.allSprites.length; i++)
     {
 		exportSprite(output, indentLevel+1, texture.allSprites[i]);

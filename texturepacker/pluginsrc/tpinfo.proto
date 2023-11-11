@@ -39,12 +39,14 @@ message Sprite
     required Rect   frame_rect = 8;     // The final placement in the texture
 
     repeated Point  vertices = 9;
+    repeated int32  indices = 10;
 }
 
 message Page
 {
     required string name = 1;
-    repeated Sprite sprites = 2;
+    required Size   size = 2;   // Size of the texture
+    repeated Sprite sprites = 3;
 }
 
 message Atlas

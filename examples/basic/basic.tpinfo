@@ -3,6 +3,10 @@
 
 pages {
   name: "basic-0.png"
+  size {
+    width: 256
+    height: 256
+  }
   sprites {
     name: "box_fill_128"
     trimmed: false
@@ -374,6 +378,10 @@ pages {
 }
 pages {
   name: "basic-1.png"
+  size {
+    width: 256
+    height: 256
+  }
   sprites {
     name: "circle_fill_128"
     trimmed: false
@@ -436,6 +444,10 @@ pages {
 }
 pages {
   name: "basic-2.png"
+  size {
+    width: 256
+    height: 256
+  }
   sprites {
     name: "shape_L_128"
     trimmed: false
@@ -490,6 +502,10 @@ pages {
 }
 pages {
   name: "basic-3.png"
+  size {
+    width: 256
+    height: 256
+  }
   sprites {
     name: "triangle_fill_128"
     trimmed: false
