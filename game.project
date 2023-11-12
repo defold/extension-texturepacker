@@ -1,6 +1,5 @@
 [bootstrap]
-main_collection = /main/loader.collectionc
-render = /defold-rive/lua/rive.renderc
+main_collection = /examples/basic/basic.collectionc
 
 [script]
 shared_state = 1

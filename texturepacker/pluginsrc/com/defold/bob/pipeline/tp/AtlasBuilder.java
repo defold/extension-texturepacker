@@ -1,48 +1,210 @@
 // License MIT
 // Copyright 2023 Defold Foundation (www.defold.com
 
-package com.dynamo.bob.pipeline;
+package com.dynamo.bob.pipeline.tp;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import java.awt.image.BufferedImage;
+
 import com.dynamo.bob.pipeline.BuilderUtil;
+import com.dynamo.bob.pipeline.ProtoUtil;
+
 import com.dynamo.bob.Builder;
 import com.dynamo.bob.BuilderParams;
 import com.dynamo.bob.CompileExceptionError;
 import com.dynamo.bob.ProtoParams;
 import com.dynamo.bob.Task;
 import com.dynamo.bob.fs.IResource;
-import com.google.protobuf.Message;
-import com.dynamo.texturepacker.proto.Atlas.AtlasDesc;
+
+import com.dynamo.bob.pipeline.TextureGeneratorException;
+import com.dynamo.bob.textureset.TextureSetGenerator;
+import com.dynamo.bob.textureset.TextureSetGenerator.TextureSetResult;
+import com.dynamo.bob.textureset.TextureSetLayout;
+import com.dynamo.bob.util.TextureUtil;
+
+// BOB
+import com.dynamo.graphics.proto.Graphics.TextureImage;
+import com.dynamo.graphics.proto.Graphics.TextureProfile;
+import com.dynamo.gamesys.proto.TextureSetProto.TextureSet; // Final engine format
+import com.dynamo.gamesys.proto.Tile.Playback;
+import com.dynamo.gamesys.proto.Tile.SpriteTrimmingMode;
+
+// Texture packer extension
+import com.dynamo.texturepacker.proto.Info;                 // The Texture Packer input format
+import com.dynamo.texturepacker.proto.Atlas.AtlasDesc;      // The high level information
+
+import com.google.protobuf.TextFormat; // Debug
 
 @ProtoParams(srcClass = AtlasDesc.class, messageClass = AtlasDesc.class)
-@BuilderParams(name="TexturePackerAtlas", inExts=".tpatlas", outExt=".tpatlasc")
+@BuilderParams(name="TexturePackerAtlas", inExts=".tpatlas", outExt = ".a.texturesetc")
 public class AtlasBuilder extends Builder<Void> {
 
     @Override
     public Task<Void> create(IResource input) throws IOException, CompileExceptionError {
         Task.TaskBuilder<Void> taskBuilder = Task.<Void>newBuilder(this)
                 .setName(params.name())
-                .addInput(input);
-
-
-        //        .addOutput(input.changeExt(params.outExt()));
+                .addInput(input)
+                .addOutput(input.changeExt(params.outExt()))
+                .addOutput(input.changeExt(".texturec"))
+                ;
 
         AtlasDesc.Builder builder = AtlasDesc.newBuilder();
         ProtoUtil.merge(input, builder);
 
-        if (!builder.getFile().equals("")) {
-            BuilderUtil.checkResource(this.project, input, "file", builder.getFile());
+        BuilderUtil.checkResource(this.project, input, "file", builder.getFile());
 
-            // Read all the inputs:
-            // * other .json files
-            taskBuilder.addInput(input.getResource(builder.getFile()));
+        IResource infoResource = input.getResource(builder.getFile());
+        taskBuilder.addInput(infoResource);
+
+        Info.Atlas infoAtlas = Loader.load(infoResource.getContent());
+
+        for (Info.Page page : infoAtlas.getPagesList()) {
+            IResource r = infoResource.getResource(page.getName());
+            taskBuilder.addInput(r);
         }
 
-        //BuilderUtil.checkResource(this.project, input, "atlas", builder.getAtlas());
-
-        //taskBuilder.addInput(this.project.getResource(builder.getAtlas()).changeExt(".a.texturesetc"));
+        // If there is a texture profiles file, we need to make sure
+        // it has been read before building this tile set, add it as an input.
+        String textureProfilesPath = this.project.getProjectProperties().getStringValue("graphics", "texture_profiles");
+        if (textureProfilesPath != null) {
+            taskBuilder.addInput(this.project.getResource(textureProfilesPath));
+        }
         return taskBuilder.build();
+    }
+
+    // Borrowed from AtlasUtil.java in bob
+    public static class MappedAnimDesc extends TextureSetGenerator.AnimDesc {
+        List<String> ids; // Ids of each frame of animation
+
+        public MappedAnimDesc(String id, List<String> ids, Playback playback, int fps,
+                                boolean flipHorizontal, boolean flipVertical) {
+            super(id, playback, fps, flipHorizontal, flipVertical);
+            this.ids = ids;
+        }
+
+        public MappedAnimDesc(String id) {
+            super(id, Playback.PLAYBACK_NONE, 0, false, false);
+            this.ids = new ArrayList<>();
+            this.ids.add(id);
+        }
+
+        public List<String> getIds() {
+            return this.ids;
+        }
+    }
+
+    public static class MappedAnimIterator implements TextureSetGenerator.AnimIterator {
+        final List<MappedAnimDesc> anims;
+        final List<String> imageIds; // The ordered list of the single frames
+        int nextAnimIndex;
+        int nextFrameIndex;
+
+        public MappedAnimIterator(List<MappedAnimDesc> anims, List<String> imageIds) {
+            this.anims = anims;
+            this.imageIds = imageIds;
+        }
+
+        @Override
+        public TextureSetGenerator.AnimDesc nextAnim() {
+            if (nextAnimIndex < anims.size()) {
+                nextFrameIndex = 0;
+                return anims.get(nextAnimIndex++);
+            }
+            return null;
+        }
+
+        @Override
+        public Integer nextFrameIndex() {
+            MappedAnimDesc anim = anims.get(nextAnimIndex - 1);
+            if (nextFrameIndex < anim.getIds().size()) {
+                return imageIds.indexOf(anim.getIds().get(nextFrameIndex++));
+            }
+            return null;
+        }
+
+        @Override
+        public void rewind() {
+            nextAnimIndex = 0;
+            nextFrameIndex = 0;
+        }
+    }
+
+    private TextureSetLayout.Size createSize(Info.Size size) {
+        return new TextureSetLayout.Size(size.getWidth(), size.getHeight());
+    }
+    private TextureSetLayout.Rectangle createRect(Info.Rect rect) {
+        return new TextureSetLayout.Rectangle(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+    }
+    private TextureSetLayout.Point createPoint(Info.Point point) {
+        return new TextureSetLayout.Point(point.getX(), point.getY());
+    }
+
+    private TextureSetLayout.SourceImage createSprite(Info.Sprite srcSprite) {
+        TextureSetLayout.SourceImage out = new TextureSetLayout.SourceImage();
+
+        out.name            = srcSprite.getName();
+        out.rotated         = srcSprite.getRotated();
+
+        Info.Rect tightRect   = srcSprite.getFrameRect();
+        Info.Size originalSze = srcSprite.getUntrimmedSize();
+        // The offset from the top left corner of the image, where to find the tight rect
+        Info.Point offset     = srcSprite.getCornerOffset();
+
+        out.rect = new TextureSetLayout.Rectangle(tightRect.getX() - offset.getX(), tightRect.getY() - offset.getY(),
+                                                  originalSze.getWidth(), originalSze.getHeight());
+
+        out.indices = new ArrayList<>(srcSprite.getIndicesList());
+        out.vertices = new ArrayList<>();
+        for (Info.Point p : srcSprite.getVerticesList()) {
+            TextureSetLayout.Point pout = createPoint(p);
+            pout.y = originalSze.getHeight() - pout.y;
+            out.vertices.add(pout);
+        }
+
+        return out;
+    }
+
+    private TextureSetLayout.Page createPage(Info.Page srcPage) {
+        TextureSetLayout.Page page = new TextureSetLayout.Page();
+        page.name = srcPage.getName();
+        page.images = new ArrayList<>();
+        page.size = createSize(srcPage.getSize());
+
+        for (Info.Sprite sprite : srcPage.getSpritesList()) {
+            page.images.add(createSprite(sprite));
+        }
+        return page;
+    }
+
+    private List<TextureSetLayout.Page> createPages(Info.Atlas srcAtlas) {
+        List<TextureSetLayout.Page> outPages = new ArrayList<>();
+        for (Info.Page srcPage : srcAtlas.getPagesList()) {
+            outPages.add(createPage(srcPage));
+        }
+        return outPages;
+    }
+
+    private List<String> getFrameIds(Info.Atlas srcAtlas) {
+        List<String> ids = new ArrayList<>();
+        for (Info.Page srcPage : srcAtlas.getPagesList()) {
+            for (Info.Sprite sprite : srcPage.getSpritesList()) {
+                ids.add(sprite.getName());
+            }
+        }
+        return ids;
+    }
+
+    private List<MappedAnimDesc> createSingleFrameAnimations(List<String> frameIds) {
+        List<MappedAnimDesc> anims = new ArrayList<>();
+        for (String id : frameIds) {
+            anims.add(new MappedAnimDesc(id));
+        }
+        return anims;
     }
 
     @Override
@@ -50,18 +212,49 @@ public class AtlasBuilder extends Builder<Void> {
 
         AtlasDesc.Builder builder = AtlasDesc.newBuilder();
         ProtoUtil.merge(task.input(0), builder);
-        //builder.setScene(BuilderUtil.replaceExt(builder.getFile(), ".tpjson", ".tpjsonc"));
-        //builder.setAtlas(BuilderUtil.replaceExt(builder.getAtlas(), ".atlas", ".a.texturesetc"));
 
-        // TODO: Create an atlasbuilder, and pass the info to it
-        // The output should be one .a.texturesetc and one .texturec (contains all pages)
+        Info.Atlas infoAtlas = Loader.load(task.input(1).getContent());
 
-        // TEMP DUMMY WRITE OUTPUT
-        // We should let the AtlasBuilder write the output, given the TPAtlas
-        Message msg = builder.build();
-        ByteArrayOutputStream out = new ByteArrayOutputStream(64 * 1024);
-        msg.writeTo(out);
-        out.close();
-        task.output(0).setContent(out.toByteArray());
+        List<TextureSetLayout.Page> pages = createPages(infoAtlas);
+
+        List<String> frameIds = getFrameIds(infoAtlas); // The unique frames
+        List<MappedAnimDesc> animations = createSingleFrameAnimations(frameIds);
+        MappedAnimIterator animIterator = new MappedAnimIterator(animations, frameIds);
+
+        List<TextureSetLayout.Layout> layouts = TextureSetLayout.createTextureSet(pages);
+        TextureSetResult result = TextureSetGenerator.createTextureSet(layouts, animIterator);
+
+        // For now, let's always use an array. If the user want to opt for a TYPE_2D, we can add a setting for it
+        TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;// : TextureImage.Type.TYPE_2D;
+        int pageCount = textureImageType == TextureImage.Type.TYPE_2D_ARRAY ? layouts.size() : 0;
+
+        int buildDirLen         = project.getBuildDirectory().length();
+        String texturePath      = task.output(1).getPath().substring(buildDirLen);
+        TextureSet textureSet   = result.builder.setPageCount(pageCount)
+                                                .setTexture(texturePath)
+                                                .build();
+
+        TextureProfile texProfile = TextureUtil.getTextureProfileByPath(this.project.getTextureProfiles(), task.input(0).getPath());
+
+        List<IResource> imageResources = new ArrayList<>();
+        for (Info.Page page : infoAtlas.getPagesList()) {
+            IResource r = task.input(1).getResource(page.getName());
+            imageResources.add(r);
+        }
+        List<BufferedImage> textureImages = TextureUtil.loadImages(imageResources);
+
+        boolean compress = project.option("texture-compression", "false").equals("true");
+
+        TextureImage texture = null;
+        try {
+            texture = TextureUtil.createMultiPageTexture(textureImages, textureImageType, texProfile, compress);
+        } catch (TextureGeneratorException e) {
+            throw new CompileExceptionError(task.input(0), -1, e.getMessage(), e);
+        }
+
+        //System.out.printf("DEBUG: %s\n", TextFormat.printToString(textureSet));
+
+        task.output(0).setContent(textureSet.toByteArray());
+        task.output(1).setContent(texture.toByteArray());
     }
 }

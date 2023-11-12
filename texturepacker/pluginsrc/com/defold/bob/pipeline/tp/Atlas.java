@@ -2,7 +2,7 @@
 // License: MIT
 //
 
-package com.dynamo.bob.pipeline;
+package com.dynamo.bob.pipeline.tp;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
