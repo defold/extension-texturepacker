@@ -13,13 +13,12 @@ high_dpi = 1
 input_method = HiddenInputField
 
 [project]
-title = extension-rive
+title = Texture Packer Example
 dependencies#0 = https://github.com/andsve/dirtylarry/archive/master.zip
 
 [library]
-include_dirs = defold-rive
+include_dirs = texturepacker
 
 [graphics]
 max_draw_calls = 1024
 max_debug_vertices = 50000
-
