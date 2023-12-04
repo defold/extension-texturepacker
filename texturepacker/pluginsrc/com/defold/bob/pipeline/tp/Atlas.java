@@ -4,29 +4,68 @@
 
 package com.dynamo.bob.pipeline.tp;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.FileNotFoundException;
 import java.io.File;
-import java.nio.Buffer;
-import java.nio.ByteBuffer;
-import java.nio.FloatBuffer;
-import java.util.List;
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
-import java.lang.reflect.Method;
+import java.awt.image.BufferedImage;
 
+import com.dynamo.bob.textureset.TextureSetGenerator;
+import com.dynamo.bob.textureset.TextureSetGenerator.TextureSetResult;
+import com.dynamo.bob.textureset.TextureSetLayout;
+import com.dynamo.graphics.proto.Graphics.TextureImage;
+import com.dynamo.graphics.proto.Graphics.TextureProfile;
 import com.dynamo.texturepacker.proto.Info;
-
 import com.google.protobuf.TextFormat;
 
+import com.dynamo.bob.pipeline.tp.AtlasBuilder.MappedAnimIterator;
+
 public class Atlas {
+
+    public Info.Atlas                       atlas;      // Is this really needed?
+    public List<String>                     frameIds;   // The unique frame names
+    public List<TextureSetLayout.Page>      pages;
+    public List<TextureSetLayout.Layout>    layouts;
+    public List<AtlasBuilder.MappedAnimDesc> animations;
+
+    public List<String>                     pageImageNames; // List of base filenames: basic-0.png, ...
+
+    // TODO: Create helper struct for the editor to hold all the info
+    static public Atlas createAtlas(String path, byte[] data) throws IOException {
+        System.out.printf("Creating atlas: %s\n", path);
+
+        Info.Atlas atlasIn = Info.Atlas.newBuilder().mergeFrom(data).build();
+
+        Atlas atlas = new Atlas();
+
+        atlas.frameIds = AtlasBuilder.getFrameIds(atlasIn);
+        atlas.animations = AtlasBuilder.createSingleFrameAnimations(atlas.frameIds);
+        atlas.pages = AtlasBuilder.createPages(atlasIn);
+        atlas.layouts = TextureSetLayout.createTextureSet(atlas.pages);
+
+        atlas.pageImageNames = new ArrayList<>();
+        for (Info.Page page : atlasIn.getPagesList()) {
+            atlas.pageImageNames.add(page.getName());
+        }
+
+        // // TODO: Use a setting in .tpatlas / array_texture
+        // TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;
+
+        return atlas;
+    }
+
+    static public TextureSetResult createTextureSet(Atlas atlas) {
+        MappedAnimIterator animIterator = new MappedAnimIterator(atlas.animations, atlas.frameIds);
+        return TextureSetGenerator.createTextureSet(atlas.layouts, animIterator);
+    }
+
+    // static public TextureImage createTexture(Atlas atlas, List<BufferedImage> textureImages, boolean compress, TextureProfile textureProfile) {
+    //     // TODO: Use a setting in .tpatlas / array_texture
+    //     TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;
+    //     return TextureUtil.createMultiPageTexture(textureImages, textureImageType, textureProfile, compress);
+    // }
 
     private Info.Atlas createDebugAtlas() {
         Info.Atlas.Builder atlasBuilder = Info.Atlas.newBuilder();

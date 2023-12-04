@@ -27,6 +27,8 @@ import com.dynamo.bob.textureset.TextureSetGenerator.TextureSetResult;
 import com.dynamo.bob.textureset.TextureSetLayout;
 import com.dynamo.bob.util.TextureUtil;
 
+// Formats
+
 // BOB
 import com.dynamo.graphics.proto.Graphics.TextureImage;
 import com.dynamo.graphics.proto.Graphics.TextureProfile;
@@ -134,17 +136,17 @@ public class AtlasBuilder extends Builder<Void> {
         }
     }
 
-    private TextureSetLayout.Size createSize(Info.Size size) {
+    static private TextureSetLayout.Size createSize(Info.Size size) {
         return new TextureSetLayout.Size(size.getWidth(), size.getHeight());
     }
-    private TextureSetLayout.Rectangle createRect(Info.Rect rect) {
+    static private TextureSetLayout.Rectangle createRect(Info.Rect rect) {
         return new TextureSetLayout.Rectangle(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
     }
-    private TextureSetLayout.Point createPoint(Info.Point point) {
+    static private TextureSetLayout.Point createPoint(Info.Point point) {
         return new TextureSetLayout.Point(point.getX(), point.getY());
     }
 
-    private TextureSetLayout.SourceImage createSprite(Info.Sprite srcSprite) {
+    static private TextureSetLayout.SourceImage createSprite(Info.Sprite srcSprite) {
         TextureSetLayout.SourceImage out = new TextureSetLayout.SourceImage();
 
         out.name            = srcSprite.getName();
@@ -161,7 +163,7 @@ public class AtlasBuilder extends Builder<Void> {
         out.indices = new ArrayList<>(srcSprite.getIndicesList());
         out.vertices = new ArrayList<>();
         for (Info.Point p : srcSprite.getVerticesList()) {
-            TextureSetLayout.Point pout = createPoint(p);
+            TextureSetLayout.Point pout = AtlasBuilder.createPoint(p);
             pout.y = originalSze.getHeight() - pout.y;
             out.vertices.add(pout);
         }
@@ -169,27 +171,27 @@ public class AtlasBuilder extends Builder<Void> {
         return out;
     }
 
-    private TextureSetLayout.Page createPage(Info.Page srcPage) {
+    static private TextureSetLayout.Page createPage(Info.Page srcPage) {
         TextureSetLayout.Page page = new TextureSetLayout.Page();
         page.name = srcPage.getName();
         page.images = new ArrayList<>();
-        page.size = createSize(srcPage.getSize());
+        page.size = AtlasBuilder.createSize(srcPage.getSize());
 
         for (Info.Sprite sprite : srcPage.getSpritesList()) {
-            page.images.add(createSprite(sprite));
+            page.images.add(AtlasBuilder.createSprite(sprite));
         }
         return page;
     }
 
-    private List<TextureSetLayout.Page> createPages(Info.Atlas srcAtlas) {
+    static public List<TextureSetLayout.Page> createPages(Info.Atlas srcAtlas) {
         List<TextureSetLayout.Page> outPages = new ArrayList<>();
         for (Info.Page srcPage : srcAtlas.getPagesList()) {
-            outPages.add(createPage(srcPage));
+            outPages.add(AtlasBuilder.createPage(srcPage));
         }
         return outPages;
     }
 
-    private List<String> getFrameIds(Info.Atlas srcAtlas) {
+    static public List<String> getFrameIds(Info.Atlas srcAtlas) {
         List<String> ids = new ArrayList<>();
         for (Info.Page srcPage : srcAtlas.getPagesList()) {
             for (Info.Sprite sprite : srcPage.getSpritesList()) {
@@ -199,7 +201,7 @@ public class AtlasBuilder extends Builder<Void> {
         return ids;
     }
 
-    private List<MappedAnimDesc> createSingleFrameAnimations(List<String> frameIds) {
+    static public List<MappedAnimDesc> createSingleFrameAnimations(List<String> frameIds) {
         List<MappedAnimDesc> anims = new ArrayList<>();
         for (String id : frameIds) {
             anims.add(new MappedAnimDesc(id));
@@ -215,9 +217,9 @@ public class AtlasBuilder extends Builder<Void> {
 
         Info.Atlas infoAtlas = Loader.load(task.input(1).getContent());
 
-        List<TextureSetLayout.Page> pages = createPages(infoAtlas);
+        List<TextureSetLayout.Page> pages = AtlasBuilder.createPages(infoAtlas);
 
-        List<String> frameIds = getFrameIds(infoAtlas); // The unique frames
+        List<String> frameIds = AtlasBuilder.getFrameIds(infoAtlas); // The unique frames
         List<MappedAnimDesc> animations = createSingleFrameAnimations(frameIds);
         MappedAnimIterator animIterator = new MappedAnimIterator(animations, frameIds);
 
