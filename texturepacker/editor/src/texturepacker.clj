@@ -12,23 +12,25 @@
             [dynamo.graph :as g]
             [editor.build-target :as bt]
             [editor.colors :as colors]
-            ;; [editor.graph-util :as gu]
-            ;; [editor.geom :as geom]
+            [editor.graph-util :as gu]
+    ;; [editor.geom :as geom]
             [editor.math :as math]
             [editor.gl :as gl]
             [editor.gl.shader :as shader]
-            ;; [editor.gl.texture :as texture]
+    ;; [editor.gl.texture :as texture]
             [editor.gl.vertex2 :as vtx]
             [editor.defold-project :as project]
             [editor.resource :as resource]
             [editor.resource-node :as resource-node]
-            ;; [editor.render :as render]
+    ;; [editor.render :as render]
+            [editor.types :as types]
             [editor.validation :as validation]
+            [editor.workspace :as workspace]
             [editor.workspace :as workspace]
             [editor.gl.pass :as pass]
             [editor.types :as types]
             [editor.outline :as outline]
-            ;; [editor.properties :as properties]
+    ;; [editor.properties :as properties]
             [editor.pipeline :as pipeline]
             [editor.pipeline.tex-gen :as tex-gen]
             [editor.texture-set :as texture-set]
@@ -49,7 +51,7 @@
 (set! *warn-on-reflection* true)
 
 (def tpinfo-icon "/texturepacker/editor/resources/icons/32/icon-tpinfo.png")
-(def tpatlas-icon "/texturepacker/editor/resources/icons/32/icon-tpmodel.png")
+(def tpatlas-icon "/texturepacker/editor/resources/icons/32/icon-tpatlas.png")
 (def animation-icon "/texturepacker/editor/resources/icons/32/icon-animation.png")
 (def image-icon "/texturepacker/editor/resources/icons/32/icon-image.png")
 
@@ -91,6 +93,22 @@
      ;                child-scenes)
      }))
 
+(g/defnk produce-tpatlas-scene [_node-id tpinfo]
+  (let [width 0
+        height 0
+        num-pages 0
+        ;[width height] size
+        ;num-pages (count (.pages tpinfo))
+        ;pages (group-by :page layout-rects)
+        ;child-renderables (into [] (for [[page-index page-rects] pages] (produce-page-renderables aabb width height page-index page-rects gpu-texture)))
+        ]
+    {:info-text (format "Atlas (.tpatlas): %d pages %d x %d" num-pages width height)
+     ;:info-text (format "Atlas (.tpatlas)")
+     ;:children (into child-renderables
+     ;                child-scenes)
+     }))
+
+
 (g/defnode TPInfoNode
   (inherits resource-node/ResourceNode)
   (inherits outline/OutlineNode)
@@ -103,6 +121,18 @@
   (property tpinfo g/Any (dynamic visible (g/constantly false)))
   (property atlas g/Any (dynamic visible (g/constantly false)))
   (property frame-ids g/Any (dynamic visible (g/constantly false)))
+
+  (property pages g/Any (dynamic visible (g/constantly false))) ; type: TextureSetLayout.Page
+  (property layouts g/Any (dynamic visible (g/constantly false))) ; type: TextureSetLayout.Layout
+  (property animations g/Any (dynamic visible (g/constantly false)))
+  (property page-names g/Any (dynamic visible (g/constantly false)))
+
+  (property width g/Num (dynamic visible (g/constantly false)))
+  (property height g/Num (dynamic visible (g/constantly false)))
+  (property size types/Vec2
+             (value (g/fnk [width height] [width height]))
+             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
+             (dynamic read-only? (g/constantly true)))
 
   (input child-scenes g/Any :array)
   (input child-outlines g/Any :array)
@@ -160,10 +190,13 @@
   (property name g/Str (dynamic read-only? (g/constantly true)))
   (property page g/Any (dynamic visible (g/constantly false)))
 
-  (property width g/Num (value (g/fnk [page] (.width (.size page))))
-            (dynamic read-only? (g/constantly true)))
-  (property height g/Num (value (g/fnk [page] (.height (.size page))))
-            (dynamic read-only? (g/constantly true)))
+  (output width g/Num :cached (g/fnk [page] (.width (.size page))))
+  (output height g/Num :cached (g/fnk [page] (.height (.size page))))
+
+  (property size types/Vec2
+             (value (g/fnk [width height] [width height]))
+             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
+             (dynamic read-only? (g/constantly true)))
 
   (output label g/Any :cached (g/fnk [name width height] (format "%s (%d x %d)" name (int width) (int height))))
 
@@ -224,16 +257,29 @@
 
 ; Loads the .tpinfo file (api is default ddf loader)
 (defn- load-tpinfo-file [project self resource tpinfo]
+  (prn "MAWE" "load-tpinfo-file" resource)
   (let [path (resource/path resource)
         bytes (protobuf/map->bytes tp-plugin-tpinfo-cls tpinfo)
         atlas (plugin-create-atlas path bytes)
+        page (first (.pages atlas))
+        size (.size page)
+        width (.width size)
+        height (.height size)
 
         tx-data (concat
                   (g/set-property self :tpinfo tpinfo)
-                  (g/set-property self :atlas (.atlas atlas))
-                  (g/set-property self :frame-ids (.frameIds atlas)))
+                  (g/set-property self :atlas atlas)
+                  (g/set-property self :width width)
+                  (g/set-property self :height height)
+                  (g/set-property self :frame-ids (.frameIds atlas))
+                  (g/set-property self :pages (.pages atlas))
+                  (g/set-property self :layouts (.layouts atlas))
+                  (g/set-property self :animations (.animations atlas))
+                  (g/set-property self :page-names (.pageImageNames atlas))
+                  )
 
-        all-tx-data (concat tx-data (create-pages self atlas))]
+        all-tx-data (concat tx-data (create-pages self atlas))
+        ]
     all-tx-data))
 
 (set! *warn-on-reflection* true)
@@ -242,8 +288,9 @@
 (defn- prop-resource-error [nil-severity _node-id prop-kw prop-value prop-name]
   (validation/prop-error :fatal _node-id prop-kw validation/prop-resource-not-exists? prop-value prop-name))
 
-(defn- validate-tpinfo-file [_node-id file]
-  (prop-resource-error :fatal _node-id :scene file ".tpinfo file"))
+(defn- validate-tpinfo-file [_node-id resource]
+       ;; TODO: verify that the page images exist
+  (prop-resource-error :fatal _node-id :scene resource ".tpinfo file"))
 
 (g/defnk produce-tpatlas-own-build-errors [_node-id file]
   (g/package-errors _node-id
@@ -258,7 +305,7 @@
                          [(bt/with-content-hash
                             {:node-id _node-id
                              :resource (workspace/make-build-resource resource)
-                             :build-fn build-rive-scene
+                             :build-fn nil ;build-rive-scene
                              :user-data {:proto-msg rive-scene-pb
                                          :dep-resources dep-resources}
                              :deps dep-build-targets})])))
@@ -275,17 +322,17 @@
 
 ; .tpatlas file
 (defn load-tpatlas-file [project self resource tpatlas]
-  (let [;; workspace (project/workspace project)
-        ;; image-msgs (resolve-image-msgs workspace (:images atlas) true)
-        ;; content (resource->bytes resource)
-        ;; bob-atlas (Atlas/loadAtlas content)
+  (let [tpinfo-resource (workspace/resolve-resource resource (:file tpatlas))
+        tx-data (concat
+                  (g/connect project :build-settings self :build-settings)
+                  (g/connect project :texture-profiles self :texture-profiles)
+                  (g/set-property self
+                                  ;:tpatlas tpatlas
+                                  :file tpinfo-resource
+                                  ))
+        ;; TODO: Add custom animations here as well
         ]
-    (concat
-     (g/connect project :build-settings self :build-settings)
-     (g/connect project :texture-profiles self :texture-profiles)
-     (g/set-property self :content tpatlas)
-    ;;  (g/set-property self :rename-patterns (:rename-patterns atlas))
-     )))
+    tx-data))
 
 
 ; saving the .tpatlas file
@@ -570,134 +617,130 @@
 (defn- atlas-outline-sort-by-fn [v]
   [(:name (g/node-type* (:node-id v)))])
 
-;; (g/defnode TPAtlasNode
-;;   (inherits resource-node/ResourceNode)
+ (g/defnode TPAtlasNode
+   (inherits resource-node/ResourceNode)
 
-;;   (property file resource/Resource
-;;             (value (gu/passthrough tpinfo-file-resource))
-;;             (set (fn [evaluation-context self old-value new-value]
-;;                    (project/resource-setter evaluation-context self old-value new-value
-;;                                             [:tpinfo-file-resource :tpinfo-file-resource]
-;;                                             [:tpinfo :content])))
-;;             (dynamic edit-type (g/constantly {:type resource/Resource :ext tpatlas-file-ext}))
-;;             (dynamic error (g/fnk [_node-id file]
-;;                                   (validate-tpinfo-file _node-id file))))
+   (property file resource/Resource
+             (value (gu/passthrough tpinfo-file-resource))
+             (set (fn [evaluation-context self old-value new-value]
+                    (project/resource-setter evaluation-context self old-value new-value
+                                             [:resource :tpinfo-file-resource]
+                                             [:tpinfo :tpinfo]
+                                             [:atlas :atlas]
+                                             [:size :size]
+                                             )))
+             (dynamic edit-type (g/constantly {:type resource/Resource :ext tpinfo-file-ext}))
+             (dynamic error (g/fnk [_node-id file]
+                                   (validate-tpinfo-file _node-id file))))
 
+   (input tpinfo-file-resource resource/Resource)
+   (input tpinfo g/Any) ; map of Atlas.Info from tpinfo_ddf.proto
+   (input atlas g/Any) ; type Atlas from Atlas.java
+   ;(input tpatlas g/Any)
 
-;;   (input tpinfo-file-resource resource/Resource)
-;;   (input tpinfo g/Any)
+   ;(property size types/Vec2
+   ;          (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
+   ;          (dynamic read-only? (g/constantly true)))
 
+   ; (property rename-patterns g/Str
+   ;           (dynamic error (g/fnk [_node-id rename-patterns] (validate-rename-patterns _node-id rename-patterns))))
 
-;;   ;; (property size types/Vec2
-;;   ;;           (value (g/fnk [layout-size] layout-size))
-;;   ;;           (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
-;;   ;;           (dynamic read-only? (g/constantly true)))
-;;   ;; (property margin g/Int
-;;   ;;           (default 0)
-;;   ;;           (dynamic error (g/fnk [_node-id margin] (validate-margin _node-id margin))))
-;;   ;; (property inner-padding g/Int
-;;   ;;           (default 0)
-;;   ;;           (dynamic error (g/fnk [_node-id inner-padding] (validate-inner-padding _node-id inner-padding))))
-;;   ;; (property extrude-borders g/Int
-;;   ;;           (default 0)
-;;   ;;           (dynamic error (g/fnk [_node-id extrude-borders] (validate-extrude-borders _node-id extrude-borders))))
-;;   ;; (property max-page-size types/Vec2
-;;   ;;           (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
-;;   ;;           (dynamic error (g/fnk [_node-id max-page-size] (validate-max-page-size _node-id max-page-size))))
+   ; (output child->order g/Any :cached (g/fnk [nodes] (zipmap nodes (range))))
 
-;;   ;; (property rename-patterns g/Str
-;;   ;;           (dynamic error (g/fnk [_node-id rename-patterns] (validate-rename-patterns _node-id rename-patterns))))
+   (input build-settings g/Any)
+   (input texture-profiles g/Any)
 
-;;   ;; (output child->order g/Any :cached (g/fnk [nodes] (zipmap nodes (range))))
+   ;(input animations Animation :array)
+   ;(input animation-ids g/Str :array)
+   ;(input animation-images [Image] :array)
+   ;(input img-ddf g/Any :array)
+   ;(input anim-ddf g/Any :array)
 
-;;   (input build-settings g/Any)
-;;   (input texture-profiles g/Any)
-;;   (input animations Animation :array)
-;;   (input animation-ids g/Str :array)
-;;   (input animation-images [Image] :array)
-;;   (input img-ddf g/Any :array)
-;;   (input anim-ddf g/Any :array)
-;;   (input child-scenes g/Any :array)
-;;   (input child-build-errors g/Any :array)
-;;   (input image-resources g/Any :array)
+   (input child-scenes g/Any :array)
+   (input child-build-errors g/Any :array)
+   ;(input image-resources g/Any :array)
 
-;;   (output texture-profile g/Any (g/fnk [texture-profiles resource]
-;;                                        (tex-gen/match-texture-profile texture-profiles (resource/proj-path resource))))
+   (output texture-profile g/Any (g/fnk [texture-profiles resource]
+                                        (tex-gen/match-texture-profile texture-profiles (resource/proj-path resource))))
+   ;
+   ;(output all-atlas-images [Image] :cached (g/fnk [animation-images]
+   ;                                                (into [] (distinct) (flatten animation-images))))
+   ;
+   ;(output layout-data-generator g/Any          produce-layout-data-generator) ; type: TextureSetResult
+   ;(output layout-data      g/Any               :cached (g/fnk [tpinfo] (.layout TextureSetResult)))
+   ;(output texture-set-data g/Any               :cached generate-texture-set-data)
+   ;(output layout-size      g/Any               (g/fnk [layout-data] (:size layout-data)))
+   ;(output texture-set      g/Any               (g/fnk [texture-set-data] (:texture-set texture-set-data)))
+   ;(output uv-transforms    g/Any               (g/fnk [layout-data] (:uv-transforms layout-data)))
+   ;(output layout-rects     g/Any               (g/fnk [layout-data] (:rects layout-data)))
+   ;
+   ;(output texture-page-count g/Int             (g/fnk [layout-data max-page-size]
+   ;                                                    (if (every? pos? max-page-size)
+   ;                                                      (count (.layouts ^TextureSetGenerator$LayoutResult (:layout layout-data)))
+   ;                                                      texture/non-paged-page-count)))
 
-;;   (output all-atlas-images [Image] :cached (g/fnk [animation-images]
-;;                                                   (into [] (distinct) (flatten animation-images))))
+   ;(output packed-page-images-generator g/Any   produce-packed-page-images-generator)
+   ;
+   ;(output packed-page-images [BufferedImage]   :cached (g/fnk [packed-page-images-generator] (call-generator packed-page-images-generator)))
+   ;
+   ;(output texture-set-pb   g/Any               :cached produce-atlas-texture-set-pb)
+   ;(output texture-pb   g/Any                   :cached produce-atlas-texture-pb)
+   ;
+   ;(output aabb             AABB                (g/fnk [layout-size]
+   ;                                                    (if (= [0 0] layout-size)
+   ;                                                      geom/null-aabb
+   ;                                                      (let [[w h] layout-size]
+   ;                                                        (types/->AABB (Point3d. 0 0 0) (Point3d. w h 0))))))
+   ;
+   ;(output gpu-texture      g/Any               :cached (g/fnk [_node-id packed-page-images texture-profile]
+   ;                                                            (let [page-texture-images
+   ;                                                                  (mapv #(tex-gen/make-preview-texture-image % texture-profile)
+   ;                                                                        packed-page-images)]
+   ;                                                              (texture/texture-images->gpu-texture
+   ;                                                               _node-id
+   ;                                                               page-texture-images
+   ;                                                               {:min-filter gl/nearest
+   ;                                                                :mag-filter gl/nearest}))))
+   ;
+   ;(output anim-data        g/Any               :cached produce-anim-data)
+   ;(output image-path->rect g/Any               :cached produce-image-path->rect)
+   ;(output anim-ids         g/Any               :cached (g/fnk [animation-ids] (filter some? animation-ids)))
+   ;(output id-counts        NameCounts          :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
-;;   (output layout-data-generator g/Any          produce-layout-data-generator)
-;;   (output layout-data      g/Any               :cached (g/fnk [layout-data-generator] (call-generator layout-data-generator)))
-;;   (output texture-set-data g/Any               :cached generate-texture-set-data)
-;;   (output layout-size      g/Any               (g/fnk [layout-data] (:size layout-data)))
-;;   (output texture-set      g/Any               (g/fnk [texture-set-data] (:texture-set texture-set-data)))
-;;   (output uv-transforms    g/Any               (g/fnk [layout-data] (:uv-transforms layout-data)))
-;;   (output layout-rects     g/Any               (g/fnk [layout-data] (:rects layout-data)))
+   ;(output node-outline     outline/OutlineData :cached (g/fnk [_node-id child-outlines own-build-errors]
+   ;                                                            {:node-id          _node-id
+   ;                                                             :node-outline-key "Atlas"
+   ;                                                             :label            "Atlas"
+   ;                                                             :children         (vec (sort-by atlas-outline-sort-by-fn child-outlines))
+   ;                                                             :icon             atlas-icon
+   ;                                                             :outline-error?   (g/error-fatal? own-build-errors)
+   ;                                                             :child-reqs       [{:node-type    AtlasImage
+   ;                                                                                 :tx-attach-fn attach-image-to-atlas}
+   ;                                                                                {:node-type    AtlasAnimation
+   ;                                                                                 :tx-attach-fn attach-animation-to-atlas}]}))
+   (output save-value       g/Any          :cached produce-tpatlas-save-value)
+   ;(output build-targets    g/Any          :cached produce-build-targets)
+   ;(output updatable        g/Any          (g/fnk [] nil))
+   (output scene g/Any :cached produce-tpatlas-scene)
 
-;;   (output texture-page-count g/Int             (g/fnk [layout-data max-page-size]
-;;                                                       (if (every? pos? max-page-size)
-;;                                                         (count (.layouts ^TextureSetGenerator$LayoutResult (:layout layout-data)))
-;;                                                         texture/non-paged-page-count)))
-
-;;   (output packed-page-images-generator g/Any   produce-packed-page-images-generator)
-
-;;   (output packed-page-images [BufferedImage]   :cached (g/fnk [packed-page-images-generator] (call-generator packed-page-images-generator)))
-
-;;   (output texture-set-pb   g/Any               :cached produce-atlas-texture-set-pb)
-
-;;   (output aabb             AABB                (g/fnk [layout-size]
-;;                                                       (if (= [0 0] layout-size)
-;;                                                         geom/null-aabb
-;;                                                         (let [[w h] layout-size]
-;;                                                           (types/->AABB (Point3d. 0 0 0) (Point3d. w h 0))))))
-
-;;   (output gpu-texture      g/Any               :cached (g/fnk [_node-id packed-page-images texture-profile]
-;;                                                               (let [page-texture-images
-;;                                                                     (mapv #(tex-gen/make-preview-texture-image % texture-profile)
-;;                                                                           packed-page-images)]
-;;                                                                 (texture/texture-images->gpu-texture
-;;                                                                  _node-id
-;;                                                                  page-texture-images
-;;                                                                  {:min-filter gl/nearest
-;;                                                                   :mag-filter gl/nearest}))))
-
-;;   (output anim-data        g/Any               :cached produce-anim-data)
-;;   (output image-path->rect g/Any               :cached produce-image-path->rect)
-;;   (output anim-ids         g/Any               :cached (g/fnk [animation-ids] (filter some? animation-ids)))
-;;   (output id-counts        NameCounts          :cached (g/fnk [anim-ids] (frequencies anim-ids)))
-;;   (output node-outline     outline/OutlineData :cached (g/fnk [_node-id child-outlines own-build-errors]
-;;                                                               {:node-id          _node-id
-;;                                                                :node-outline-key "Atlas"
-;;                                                                :label            "Atlas"
-;;                                                                :children         (vec (sort-by atlas-outline-sort-by-fn child-outlines))
-;;                                                                :icon             atlas-icon
-;;                                                                :outline-error?   (g/error-fatal? own-build-errors)
-;;                                                                :child-reqs       [{:node-type    AtlasImage
-;;                                                                                    :tx-attach-fn attach-image-to-atlas}
-;;                                                                                   {:node-type    AtlasAnimation
-;;                                                                                    :tx-attach-fn attach-animation-to-atlas}]}))
-;;   (output save-value       g/Any          :cached produce-tpatlas-save-value)
-;;   (output build-targets    g/Any          :cached produce-build-targets)
-;;   (output updatable        g/Any          (g/fnk [] nil))
-;;   (output scene            g/Any          :cached produce-scene)
-;;   (output own-build-errors g/Any          (g/fnk [_node-id extrude-borders inner-padding margin max-page-size rename-patterns]
-;;                                                  (g/package-errors _node-id
-;;                                                                    (validate-margin _node-id margin)
-;;                                                                    (validate-inner-padding _node-id inner-padding)
-;;                                                                    (validate-extrude-borders _node-id extrude-borders)
-;;                                                                    (validate-max-page-size _node-id max-page-size)
-;;                                                                    (validate-rename-patterns _node-id rename-patterns))))
-;;   (output build-errors     g/Any          (g/fnk [_node-id child-build-errors own-build-errors]
-;;                                                  (g/package-errors _node-id
-;;                                                                    child-build-errors
-;;                                                                    own-build-errors))))
+   ;(output own-build-errors g/Any          (g/fnk [_node-id extrude-borders inner-padding margin max-page-size rename-patterns]
+   ;                                               (g/package-errors _node-id
+   ;                                                                 (validate-margin _node-id margin)
+   ;                                                                 (validate-inner-padding _node-id inner-padding)
+   ;                                                                 (validate-extrude-borders _node-id extrude-borders)
+   ;                                                                 (validate-max-page-size _node-id max-page-size)
+   ;                                                                 (validate-rename-patterns _node-id rename-patterns))))
+   ;(output build-errors     g/Any          (g/fnk [_node-id child-build-errors own-build-errors]
+   ;                                               (g/package-errors _node-id
+   ;                                                                 child-build-errors
+   ;                                                                 own-build-errors)))
+            )
 
 
 (defn register-resource-types [workspace]
   (concat
 
-   (resource-node/register-ddf-resource-type workspace
+    (resource-node/register-ddf-resource-type workspace
                                              :ext tpinfo-file-ext
                                              :label "Texture Packer Export File"
                                              :node-type TPInfoNode
@@ -706,18 +749,18 @@
                                              :ddf-type tp-plugin-tpinfo-cls
                                              :view-types [:scene :text]))
 
-  ;;  (resource-node/register-ddf-resource-type workspace
-  ;;                                            :ext tpatlas-file-ext
-  ;;                                            :build-ext "a.texturesetc"
-  ;;                                            :label "Texture Packer Atlas"
-  ;;                                            :node-type TPAtlasNode
-  ;;                                            :ddf-type tp-plugin-tpatlas-cls
-  ;;                                            :load-fn load-tpatlas-file
-  ;;                                            :icon tpatlas-icon
-  ;;                                            :view-types [:scene :text]
-  ;;                                            :view-opts {:scene {:grid true}}
-  ;;                                            :template "/texturepacker/resources/templates/template.tpatlas")
-)
+    ;(resource-node/register-ddf-resource-type workspace
+    ;                                          :ext tpatlas-file-ext
+    ;                                          :build-ext "a.texturesetc"
+    ;                                          :label "Texture Packer Atlas"
+    ;                                          :node-type TPAtlasNode
+    ;                                          :ddf-type tp-plugin-tpatlas-cls
+    ;                                          :load-fn load-tpatlas-file
+    ;                                          :icon tpatlas-icon
+    ;                                          :view-types [:scene :text]
+    ;                                          :view-opts {:scene {:grid true}}
+    ;                                          :template "/texturepacker/resources/templates/template.tpatlas")
+      )
 
 ; The plugin
 (defn load-plugin-texturepacker [workspace]
