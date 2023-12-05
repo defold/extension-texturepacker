@@ -103,11 +103,6 @@
   (property tpinfo g/Any (dynamic visible (g/constantly false)))
   (property atlas g/Any (dynamic visible (g/constantly false)))
   (property frame-ids g/Any (dynamic visible (g/constantly false)))
-  ;; (property animations g/Any)
-  ;; (property state-machine-ids g/Any)
-  ;; (property aabb g/Any)
-  ;; (property vertices g/Any)
-  ;; (property bones g/Any)
 
   (input child-scenes g/Any :array)
   (input child-outlines g/Any :array)
@@ -133,9 +128,6 @@
   (property rotated g/Bool
             (value (g/fnk [image] (.rotated image)))
             (dynamic read-only? (g/constantly true)))
-
-  ;(property rotated g/Bool :cached (g/fnk [image] (.rotated image)))
-           ;(dynamic read-only? (g/constantly true))
 
   (output label g/Any :cached (g/fnk [name] (format "%s" name)))
 
@@ -257,19 +249,6 @@
   (g/package-errors _node-id
                     (validate-tpinfo-file _node-id file)))
 
-(defn- build-rive-scene [resource dep-resources user-data]
-  (let [pb (:proto-msg user-data)
-        pb (reduce
-             #(assoc %1 (first %2) (second %2))
-             pb
-             (map
-               (fn [[label res]]
-                   (when (not (nil? res))
-                         [label (resource/proj-path (get dep-resources res))]))
-               (:dep-resources user-data)))]
-    {:resource resource :content (protobuf/map->bytes (workspace/load-class! "com.dynamo.rive.proto.Rive$RiveSceneDesc") pb)}))
-
-
 (g/defnk produce-tpatlas-build-targets
   [_node-id own-build-errors resource rive-scene-pb rive-file atlas-resource dep-build-targets]
   (g/precluding-errors own-build-errors
@@ -293,188 +272,6 @@
 (defn- renderable->texture-set-pb [renderable]
   (get-in renderable [:user-data :texture-set-pb]))
 
-
-(shader/defshader rive-id-shader-vp
-  (attribute vec2 position)
-  (uniform vec4 cover)
-  (defn void main []
-    (setq vec4 pos (vec4 position.xy 0.0 1.0))
-    (setq gl_Position (+ (* (* gl_ModelViewProjectionMatrix pos) (- 1.0  cover.x)) (* cover.x pos)))
-    ))
-
-(shader/defshader rive-id-shader-fp
-  (uniform vec4 color)
-  (uniform vec4 id)
-  (defn void main []
-    (if (> color.a 0.05)
-      (setq gl_FragColor id)
-      (discard))
-    ))
-
-(def rive-id-shader (shader/make-shader ::id-shader rive-id-shader-vp rive-id-shader-fp {"id" :id}))
-
-(vtx/defvertex vtx-textured
- (vec2 position)
- (vec2 texcoord0))
-
-(set! *warn-on-reflection* false)
-
-(defn renderable->render-objects [renderable]
-  (let [handle (renderable->handle renderable)
-        texture-set-pb (renderable->texture-set-pb renderable)
-        vb-data (.vertices handle)
-        vb-data-float-buffer (FloatBuffer/wrap vb-data)
-        vb (vtx/wrap-vertex-buffer vtx-textured :static vb-data-float-buffer)
-
-        ib-data (.indices handle)
-        ib (IntBuffer/wrap ib-data)
-
-        render-objects (.renderObjects handle)]
-    {:vertex-buffer vb
-     :index-buffer ib
-     :render-objects render-objects
-     :handle handle
-     :texture-set-pb texture-set-pb
-     :renderable renderable}))
-
-(set! *warn-on-reflection* true)
-
-(defn collect-render-groups [renderables]
-  (map renderable->render-objects renderables))
-
-(def constant-colors (murmur/hash64 "colors"))
-(def constant-transform_local (murmur/hash64 "transform_local"))
-(def constant-cover (murmur/hash64 "cover"))
-(def constant-stops (murmur/hash64 "stops"))
-(def constant-gradientLimits (murmur/hash64 "gradientLimits"))
-(def constant-properties (murmur/hash64 "properties"))
-
-(defn- constant-hash->name [hash]
-  (condp = hash
-    constant-colors "colors"
-    constant-transform_local "transform_local"
-    constant-cover "cover"
-    constant-stops "stops"
-    constant-gradientLimits "gradientLimits"
-    constant-properties "properties"
-    "unknown"))
-
-(defn- do-mask [mask count]
-  ; Checks if a bit in the mask is set: "(mask & (1<<count)) != 0"
-  (not= 0 (bit-and mask (bit-shift-left 1 count))))
-
-; See GetOpenGLCompareFunc in graphics_opengl.cpp
-(defn- stencil-func->gl-func [func]
-  (case func
-    0 GL/GL_NEVER
-    1 GL/GL_LESS
-    2 GL/GL_LEQUAL
-    3 GL/GL_GREATER
-    4 GL/GL_GEQUAL
-    5 GL/GL_EQUAL
-    6 GL/GL_NOTEQUAL
-    7 GL/GL_ALWAYS))
-
-(defn- stencil-op->gl-op [op]
-  (case op
-    0 GL/GL_KEEP
-    1 GL/GL_ZERO
-    2 GL/GL_REPLACE
-    3 GL/GL_INCR
-    4 GL/GL_INCR_WRAP
-    5 GL/GL_DECR
-    6 GL/GL_DECR_WRAP
-    7 GL/GL_INVERT))
-
-(set! *warn-on-reflection* false)
-
-(defn- set-stencil-func! [^GL2 gl face-type ref ref-mask state]
-  (let [gl-func (stencil-func->gl-func (.func state))
-        op-stencil-fail (stencil-op->gl-op (.opSFail state))
-        op-depth-fail (stencil-op->gl-op (.opDPFail state))
-        op-depth-pass (stencil-op->gl-op (.opDPPass state))]
-    (.glStencilFuncSeparate gl face-type gl-func ref ref-mask)
-    (.glStencilOpSeparate gl face-type op-stencil-fail op-depth-fail op-depth-pass)))
-
-(defn- to-int [b]
-  (bit-and 0xff (int b)))
-
-; See ApplyStencilTest in render.cpp for reference
-(defn- set-stencil-test-params! [^GL2 gl params]
-  (let [clear (.clearBuffer params)
-        mask (to-int (.bufferMask params))
-        color-mask (.colorBufferMask params)
-        separate-states (.separateFaceStates params)
-        ref (to-int (.ref params))
-        ref-mask (to-int (.refMask params))
-        state-front (.front params)
-        state-back (if (not= separate-states 0) (.back params) state-front)]
-    (when (not= clear 0)
-      (.glStencilMask gl 0xFF)
-      (.glClear gl GL/GL_STENCIL_BUFFER_BIT))
-
-    (.glColorMask gl (do-mask color-mask 3) (do-mask color-mask 2) (do-mask color-mask 1) (do-mask color-mask 0))
-    (.glStencilMask gl mask)
-
-    (set-stencil-func! gl GL/GL_FRONT ref ref-mask state-front)
-    (set-stencil-func! gl GL/GL_BACK ref ref-mask state-back)))
-
-(defn- to-vector4d [v]
-  (Vector4d. (.x v) (.y v) (.z v) (.w v)))
-
-(defn- vector4d-to-floats [^Vector4d val]
-  (list (.x val) (.y val) (.z val) (.w val)))
-
-(defn- set-constant! [^GL2 gl shader constant]
-
-  (let [name-hash (.nameHash constant)
-        name (constant-hash->name name-hash)
-        values-array (.values constant)
-        count (alength values-array)
-        ;; TODO: Make a helper function from Java instead!
-        values (vec (.values constant))
-        vec4-vals (map to-vector4d values)
-        dbl-vals (mapcat vector4d-to-floats vec4-vals)
-        flt-vals (float-array dbl-vals)]
-    (when (not= name-hash 0)
-      (let []
-        (shader/set-uniform-array shader gl name count flt-vals)))))
-
-(defn- set-constants! [^GL2 gl shader ro]
-  (let [constants (.constantBuffer ro)]
-    (doall (map (fn [constant] (set-constant! gl shader constant)) constants))))
-
-(defmacro gl-draw-arrays-2 [gl prim-type start count]      `(.glDrawArrays ~(with-meta gl {:tag `GL}) ~prim-type ~start ~count))
-
-(defn- do-render-object! [^GL2 gl render-args shader renderable ro]
-  (let [start (.vertexStart ro) ; the name is from the engine, but in this case refers to the index
-        count (.vertexCount ro) ; count in number of indices
-        start (* start 2) ; offset in bytes
-        face-winding (if (not= (.faceWinding ro) 0) GL/GL_CCW GL/GL_CW)
-
-        ro-transform (double-array (.m (.worldTransform ro)))
-        renderable-transform (Matrix4d. (:world-transform renderable)) ; make a copy so we don't alter the original
-        ro-matrix (doto (Matrix4d. ro-transform) (.transpose))
-        shader-world-transform (doto renderable-transform (.mul ro-matrix))
-        primitive-type (.primitiveType ro)
-        is-tri-strip (= primitive-type 2)
-        gl-prim-type (if is-tri-strip GL/GL_TRIANGLE_STRIP GL/GL_TRIANGLES)
-        render-args (merge render-args
-                           (math/derive-render-transforms shader-world-transform
-                                                          (:view render-args)
-                                                          (:projection render-args)
-                                                          (:texture render-args)))]
-
-    (shader/set-uniform shader gl "world_view_proj" (:world-view-proj render-args))
-    (set-constants! gl shader ro)
-    (when (.setFaceWinding ro)
-      (gl/gl-front-face gl face-winding))
-    (when (.setStencilTest ro)
-      (set-stencil-test-params! gl (.stencilTestParams ro)))
-
-    (gl/gl-draw-elements gl gl-prim-type start count)))
-
-(set! *warn-on-reflection* true)
 
 ; .tpatlas file
 (defn load-tpatlas-file [project self resource tpatlas]
@@ -919,19 +716,6 @@
   ;;                                            :icon tpatlas-icon
   ;;                                            :view-types [:scene :text]
   ;;                                            :view-opts {:scene {:grid true}}
-  ;;                                            :template "/texturepacker/resources/templates/template.tpatlas")
-
-  ;;  (resource-node/register-ddf-resource-type workspace
-  ;;                                            :ext rive-model-ext
-  ;;                                            :label "Rive Model"
-  ;;                                            :node-type RiveModelNode
-  ;;                                            :ddf-type (workspace/load-class! "com.dynamo.rive.proto.Rive$RiveModelDesc")
-  ;;                                            :load-fn load-rive-model
-  ;;                                            :icon rive-model-icon
-  ;;                                            :view-types [:scene :text]
-  ;;                                            :view-opts {:scene {:grid true}}
-  ;;                                            :tags #{:component}
-  ;;                                            :tag-opts {:component {:transform-properties #{:position :rotation}}}
   ;;                                            :template "/texturepacker/resources/templates/template.tpatlas")
 )
 
