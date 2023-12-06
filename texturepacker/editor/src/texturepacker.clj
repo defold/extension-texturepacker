@@ -257,7 +257,6 @@
 
 ; Loads the .tpinfo file (api is default ddf loader)
 (defn- load-tpinfo-file [project self resource tpinfo]
-  (prn "MAWE" "load-tpinfo-file" resource)
   (let [path (resource/path resource)
         bytes (protobuf/map->bytes tp-plugin-tpinfo-cls tpinfo)
         atlas (plugin-create-atlas path bytes)
@@ -318,7 +317,6 @@
 
 (defn- renderable->texture-set-pb [renderable]
   (get-in renderable [:user-data :texture-set-pb]))
-
 
 ; .tpatlas file
 (defn load-tpatlas-file [project self resource tpatlas]
@@ -625,22 +623,26 @@
              (set (fn [evaluation-context self old-value new-value]
                     (project/resource-setter evaluation-context self old-value new-value
                                              [:resource :tpinfo-file-resource]
+                                             [:node-outline :tpinfo-node-outline]
                                              [:tpinfo :tpinfo]
                                              [:atlas :atlas]
-                                             [:size :size]
+                                             [:size :tpinfo-size]
                                              )))
              (dynamic edit-type (g/constantly {:type resource/Resource :ext tpinfo-file-ext}))
              (dynamic error (g/fnk [_node-id file]
                                    (validate-tpinfo-file _node-id file))))
 
    (input tpinfo-file-resource resource/Resource)
+   (input tpinfo-node-outline g/Any)
+
    (input tpinfo g/Any) ; map of Atlas.Info from tpinfo_ddf.proto
    (input atlas g/Any) ; type Atlas from Atlas.java
-   ;(input tpatlas g/Any)
+   (input tpinfo-size g/Any)
 
-   ;(property size types/Vec2
-   ;          (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
-   ;          (dynamic read-only? (g/constantly true)))
+   (property size types/Vec2
+             (value (g/fnk [tpinfo-size] tpinfo-size))
+             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
+             (dynamic read-only? (g/constantly true)))
 
    ; (property rename-patterns g/Str
    ;           (dynamic error (g/fnk [_node-id rename-patterns] (validate-rename-patterns _node-id rename-patterns))))
@@ -707,17 +709,21 @@
    ;(output anim-ids         g/Any               :cached (g/fnk [animation-ids] (filter some? animation-ids)))
    ;(output id-counts        NameCounts          :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
-   ;(output node-outline     outline/OutlineData :cached (g/fnk [_node-id child-outlines own-build-errors]
-   ;                                                            {:node-id          _node-id
-   ;                                                             :node-outline-key "Atlas"
-   ;                                                             :label            "Atlas"
-   ;                                                             :children         (vec (sort-by atlas-outline-sort-by-fn child-outlines))
-   ;                                                             :icon             atlas-icon
-   ;                                                             :outline-error?   (g/error-fatal? own-build-errors)
-   ;                                                             :child-reqs       [{:node-type    AtlasImage
-   ;                                                                                 :tx-attach-fn attach-image-to-atlas}
-   ;                                                                                {:node-type    AtlasAnimation
-   ;                                                                                 :tx-attach-fn attach-animation-to-atlas}]}))
+   (output node-outline     outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline own-build-errors]
+                                                               {:node-id          _node-id
+                                                                :node-outline-key "Atlas"
+                                                                :label            "Atlas"
+                                                                :children         (into []
+                                                                                    (mapcat :children)
+                                                                                    (:children tpinfo-node-outline))
+                                                                :icon             tpatlas-icon
+                                                                ;:outline-error?   (g/error-fatal? own-build-errors)
+                                                                ;:child-reqs       [{:node-type    AtlasImage
+                                                                ;                    :tx-attach-fn attach-image-to-atlas}
+                                                                ;                   {:node-type    AtlasAnimation
+                                                                ;                    :tx-attach-fn attach-animation-to-atlas}]
+                                                                }))
+
    (output save-value       g/Any          :cached produce-tpatlas-save-value)
    ;(output build-targets    g/Any          :cached produce-build-targets)
    ;(output updatable        g/Any          (g/fnk [] nil))
@@ -747,20 +753,20 @@
                                              :load-fn load-tpinfo-file
                                              :icon tpinfo-icon
                                              :ddf-type tp-plugin-tpinfo-cls
-                                             :view-types [:scene :text]))
+                                             :view-types [:scene :text])
 
-    ;(resource-node/register-ddf-resource-type workspace
-    ;                                          :ext tpatlas-file-ext
-    ;                                          :build-ext "a.texturesetc"
-    ;                                          :label "Texture Packer Atlas"
-    ;                                          :node-type TPAtlasNode
-    ;                                          :ddf-type tp-plugin-tpatlas-cls
-    ;                                          :load-fn load-tpatlas-file
-    ;                                          :icon tpatlas-icon
-    ;                                          :view-types [:scene :text]
-    ;                                          :view-opts {:scene {:grid true}}
-    ;                                          :template "/texturepacker/resources/templates/template.tpatlas")
-      )
+    (resource-node/register-ddf-resource-type workspace
+                                              :ext tpatlas-file-ext
+                                              :build-ext "a.texturesetc"
+                                              :label "Texture Packer Atlas"
+                                              :node-type TPAtlasNode
+                                              :ddf-type tp-plugin-tpatlas-cls
+                                              :load-fn load-tpatlas-file
+                                              :icon tpatlas-icon
+                                              :view-types [:scene :text]
+                                              :view-opts {:scene {:grid true}}
+                                              :template "/texturepacker/resources/templates/template.tpatlas")
+      ))
 
 ; The plugin
 (defn load-plugin-texturepacker [workspace]
