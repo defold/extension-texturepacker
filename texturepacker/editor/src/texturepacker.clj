@@ -217,33 +217,34 @@
                                                    :children child-outlines
                                                    :read-only true})))
 
-(defn- create-image-node [parent-id image]
+(defn- create-image-node [tpinfo-id parent-id image]
   (let [name (.name image)
         parent-graph-id (g/node-id->graph-id parent-id)
-        image-tx-data (g/make-nodes parent-graph-id [page-id [AtlasSourceImageNode :name name :image image]]
-                                   (g/connect page-id :_node-id parent-id :nodes)
-                                   (g/connect page-id :node-outline parent-id :child-outlines))]
+        image-tx-data (g/make-nodes parent-graph-id [image-id [AtlasSourceImageNode :name name :image image]]
+                                   (g/connect image-id :_node-id parent-id :nodes)
+                                   (g/connect image-id :node-outline parent-id :child-outlines)
+                                   (g/connect image-id :_node-id tpinfo-id :images))]
     image-tx-data))
 
-(defn- create-image-nodes [parent-id page]
+(defn- create-image-nodes [tpinfo-id parent-id page]
   (let [images (.images page)
-        tx-data (mapcat (fn [image] (create-image-node parent-id image)) images)]
+        tx-data (mapcat (fn [image] (create-image-node tpinfo-id parent-id image)) images)]
     tx-data))
 
 
 (defn- tx-first-created [tx-data]
   (get-in (first tx-data) [:node :_node-id]))
 
-(defn- create-page-node [parent-id page]
+(defn- create-page-node [tpinfo-id page]
   (let [name (.name page)
-        parent-graph-id (g/node-id->graph-id parent-id)
+        parent-graph-id (g/node-id->graph-id tpinfo-id)
         page-tx-data (g/make-nodes parent-graph-id [page-id [AtlasPageNode :name name :page page]]
-                                   (g/connect page-id :_node-id parent-id :nodes)
-                                   (g/connect page-id :node-outline parent-id :child-outlines)
-                                   ;(g/connect page :sprites parent-id :child-sprites)
+                                   (g/connect page-id :_node-id tpinfo-id :nodes)
+                                   (g/connect page-id :node-outline tpinfo-id :child-outlines)
+                                   ;(g/connect page :sprites tpinfo-id :child-sprites)
                                    )
         page-id (tx-first-created page-tx-data)
-        images-tx-data (create-image-nodes page-id page)]
+        images-tx-data (create-image-nodes tpinfo-id page-id page)]
     (concat page-tx-data images-tx-data)))
 
 
@@ -319,6 +320,20 @@
 (defn- renderable->texture-set-pb [renderable]
   (get-in renderable [:user-data :texture-set-pb]))
 
+(defn- attach-image-to-animation [animation-node image-node]
+  (concat
+    (g/connect image-node     :_node-id         animation-node :nodes)
+    (g/connect image-node     :atlas-image      animation-node :atlas-images)
+    (g/connect image-node     :build-errors     animation-node :child-build-errors)
+    (g/connect image-node     :ddf-message      animation-node :img-ddf)
+    (g/connect image-node     :image-resource   animation-node :image-resources)
+    (g/connect image-node     :node-outline     animation-node :child-outlines)
+    (g/connect image-node     :scene            animation-node :child-scenes)
+    (g/connect animation-node :child->order     image-node     :child->order)
+    (g/connect animation-node :image-path->rect image-node     :image-path->rect)
+    (g/connect animation-node :layout-size      image-node     :layout-size)
+    (g/connect animation-node :updatable        image-node     :animation-updatable)
+    (g/connect animation-node :rename-patterns  image-node     :rename-patterns)))
 
 (defn- attach-animation-to-atlas [atlas-node animation-node]
   (concat
@@ -333,7 +348,7 @@
     (g/connect animation-node :scene            atlas-node     :child-scenes)
     ;TODO (g/connect atlas-node     :anim-data        animation-node :anim-data)
     ;(g/connect atlas-node     :gpu-texture      animation-node :gpu-texture)
-    ;(g/connect atlas-node     :id-counts        animation-node :id-counts)
+    (g/connect atlas-node     :id-counts        animation-node :id-counts)
     ;(g/connect atlas-node     :layout-size      animation-node :layout-size)
     ;(g/connect atlas-node     :image-path->rect animation-node :image-path->rect)
     #_(g/connect atlas-node     :rename-patterns  animation-node :rename-patterns)))
@@ -345,8 +360,7 @@
                   (g/connect project :texture-profiles self :texture-profiles)
                   (g/set-property self
                                   ;:tpatlas tpatlas
-                                  :file tpinfo-resource
-                                  ))
+                                  :file tpinfo-resource))
         ;; TODO: Add custom animations here as well
         ]
     tx-data))
@@ -646,6 +660,7 @@
                                              [:tpinfo :tpinfo]
                                              [:atlas :atlas]
                                              [:size :tpinfo-size]
+                                             [:images :tpinfo-images]
                                              )))
              (dynamic edit-type (g/constantly {:type resource/Resource :ext tpinfo-file-ext}))
              (dynamic error (g/fnk [_node-id file]
@@ -653,6 +668,7 @@
 
    (input tpinfo-file-resource resource/Resource)
    (input tpinfo-node-outline g/Any)
+   (input tpinfo-images g/Any) ; node id's to each AtlasSourceImageNode
 
    (input tpinfo g/Any) ; map of Atlas.Info from tpinfo_ddf.proto
    (input atlas g/Any) ; type Atlas from Atlas.java
@@ -727,8 +743,8 @@
    ;
    ;(output anim-data        g/Any               :cached produce-anim-data)
    ;(output image-path->rect g/Any               :cached produce-image-path->rect)
-   ;(output anim-ids         g/Any               :cached (g/fnk [animation-ids] (filter some? animation-ids)))
-   ;(output id-counts        NameCounts          :cached (g/fnk [anim-ids] (frequencies anim-ids)))
+   (output anim-ids         g/Any               :cached (g/fnk [animation-ids] (filter some? animation-ids)))
+   (output id-counts        NameCounts          :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
    (output node-outline     outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline child-outlines own-build-errors]
                                                                {:node-id          _node-id
@@ -782,9 +798,7 @@
   (inherits core/Scope)
   (inherits outline/OutlineNode)
 
-  (property id g/Str
-            ;(dynamic error (g/fnk [_node-id id id-counts] (validate-animation-id _node-id id id-counts)))
-            )
+  (property id g/Str (dynamic error (g/fnk [_node-id id id-counts] (validate-animation-id _node-id id id-counts))))
   (property fps g/Int
             (default 30)
             (dynamic error (g/fnk [_node-id fps] (validate-animation-fps _node-id fps))))
@@ -798,10 +812,11 @@
   (input atlas-images Image :array)
   (output atlas-images [Image] (gu/passthrough atlas-images))
 
+  ; A map from id to id frequency (to detect duplicate names)
+  (input id-counts NameCounts)
   (input img-ddf g/Any :array)
   (input child-scenes g/Any :array)
   (input child-build-errors g/Any :array)
-  ;(input id-counts NameCounts)
   (input anim-data g/Any)
   ;
   ;(input layout-size g/Any)
@@ -834,9 +849,9 @@
   (output ddf-message g/Any :cached produce-anim-ddf)
   (output updatable g/Any :cached produce-animation-updatable)
   (output scene g/Any :cached produce-animation-scene)
-  (output own-build-errors g/Any (g/fnk [_node-id fps id ] ;id-counts
+  (output own-build-errors g/Any (g/fnk [_node-id fps id id-counts]
                                    (g/package-errors _node-id
-                                                     ;(validate-animation-id _node-id id id-counts)
+                                                     (validate-animation-id _node-id id id-counts)
                                                      (validate-animation-fps _node-id fps))))
   (output build-errors g/Any (g/fnk [_node-id child-build-errors own-build-errors]
                                (g/package-errors _node-id
