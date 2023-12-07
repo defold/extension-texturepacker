@@ -10,9 +10,12 @@
   (:require [clojure.java.io :as io]
             [editor.protobuf :as protobuf]
             [dynamo.graph :as g]
+            [editor.app-view :as app-view]
             [editor.build-target :as bt]
             [editor.colors :as colors]
+            [editor.core :as core]
             [editor.graph-util :as gu]
+            [editor.handler :as handler]
     ;; [editor.geom :as geom]
             [editor.math :as math]
             [editor.gl :as gl]
@@ -30,7 +33,7 @@
             [editor.gl.pass :as pass]
             [editor.types :as types]
             [editor.outline :as outline]
-    ;; [editor.properties :as properties]
+            [editor.properties :as properties]
             [editor.pipeline :as pipeline]
             [editor.pipeline.tex-gen :as tex-gen]
             [editor.texture-set :as texture-set]
@@ -42,11 +45,9 @@
            [java.io IOException]
            [java.nio FloatBuffer IntBuffer]
            [javax.vecmath Matrix4d Vector3d Vector4d]
-           ;;[com.dynamo.texturepacker.proto Info$Atlas]
+           [editor.types Animation Image AABB]
            [com.dynamo.gamesys.proto Tile$Playback Tile$SpriteTrimmingMode]
-           [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
-
-           ))
+           [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]))
 
 (set! *warn-on-reflection* true)
 
@@ -93,20 +94,20 @@
      ;                child-scenes)
      }))
 
-(g/defnk produce-tpatlas-scene [_node-id tpinfo]
-  (let [width 0
-        height 0
-        num-pages 0
-        ;[width height] size
-        ;num-pages (count (.pages tpinfo))
+(set! *warn-on-reflection* false)
+
+(g/defnk produce-tpatlas-scene [_node-id size atlas]
+  (let [[width height] size
+        num-pages (count (.pages atlas))
         ;pages (group-by :page layout-rects)
         ;child-renderables (into [] (for [[page-index page-rects] pages] (produce-page-renderables aabb width height page-index page-rects gpu-texture)))
         ]
-    {:info-text (format "Atlas (.tpatlas): %d pages %d x %d" num-pages width height)
-     ;:info-text (format "Atlas (.tpatlas)")
+    {:info-text (format "Atlas: %d pages %d x %d" num-pages (int width) (int height))
      ;:children (into child-renderables
      ;                child-scenes)
      }))
+
+(set! *warn-on-reflection* true)
 
 
 (g/defnode TPInfoNode
@@ -318,6 +319,24 @@
 (defn- renderable->texture-set-pb [renderable]
   (get-in renderable [:user-data :texture-set-pb]))
 
+
+(defn- attach-animation-to-atlas [atlas-node animation-node]
+  (concat
+    (g/connect animation-node :_node-id         atlas-node     :nodes)
+    (g/connect animation-node :animation        atlas-node     :animations)
+    ;(g/connect animation-node :atlas-images     atlas-node     :animation-images)
+    (g/connect animation-node :build-errors     atlas-node     :child-build-errors)
+    (g/connect animation-node :ddf-message      atlas-node     :anim-ddf)
+    (g/connect animation-node :id               atlas-node     :animation-ids)
+    ;NOT NEEDED, right? (g/connect animation-node :image-resources  atlas-node     :image-resources)
+    (g/connect animation-node :node-outline     atlas-node     :child-outlines)
+    (g/connect animation-node :scene            atlas-node     :child-scenes)
+    ;TODO (g/connect atlas-node     :anim-data        animation-node :anim-data)
+    ;(g/connect atlas-node     :gpu-texture      animation-node :gpu-texture)
+    ;(g/connect atlas-node     :id-counts        animation-node :id-counts)
+    ;(g/connect atlas-node     :layout-size      animation-node :layout-size)
+    ;(g/connect atlas-node     :image-path->rect animation-node :image-path->rect)
+    #_(g/connect atlas-node     :rename-patterns  animation-node :rename-patterns)))
 ; .tpatlas file
 (defn load-tpatlas-file [project self resource tpatlas]
   (let [tpinfo-resource (workspace/resolve-resource resource (:file tpatlas))
@@ -593,9 +612,9 @@
     (assoc layout-data
            :texture-set complete-ddf-texture-set)))
 
-(g/defnk produce-anim-data
-  [texture-set uv-transforms]
-  (texture-set/make-anim-data texture-set uv-transforms))
+; TODO: We want to use the UV coordinates from the atlas
+;(g/defnk produce-anim-data [texture-set uv-transforms]
+;  (texture-set/make-anim-data texture-set uv-transforms))
 
 (s/defrecord AtlasRect
              [path     :- s/Any
@@ -605,12 +624,12 @@
               height   :- types/Int32
               page     :- types/Int32])
 
-(g/defnk produce-image-path->rect
-  [layout-size layout-rects]
-  (let [[w h] layout-size]
-    (into {} (map (fn [{:keys [path x y width height page]}]
-                    [path (->AtlasRect path x (- h height y) width height page)]))
-          layout-rects)))
+;(g/defnk produce-image-path->rect
+;  [layout-size layout-rects]
+;  (let [[w h] layout-size]
+;    (into {} (map (fn [{:keys [path x y width height page]}]
+;                    [path (->AtlasRect path x (- h height y) width height page)]))
+;          layout-rects)))
 
 (defn- atlas-outline-sort-by-fn [v]
   [(:name (g/node-type* (:node-id v)))])
@@ -652,14 +671,16 @@
    (input build-settings g/Any)
    (input texture-profiles g/Any)
 
-   ;(input animations Animation :array)
-   ;(input animation-ids g/Str :array)
+   (input animations Animation :array)
    ;(input animation-images [Image] :array)
    ;(input img-ddf g/Any :array)
-   ;(input anim-ddf g/Any :array)
+   (input anim-ddf g/Any :array) ; Array of protobuf maps for each manually created animation
+   (input animation-ids g/Str :array) ; List of the manually create animation ids
 
    (input child-scenes g/Any :array)
    (input child-build-errors g/Any :array)
+   (input child-outlines g/Any :array)
+
    ;(input image-resources g/Any :array)
 
    (output texture-profile g/Any (g/fnk [texture-profiles resource]
@@ -709,13 +730,15 @@
    ;(output anim-ids         g/Any               :cached (g/fnk [animation-ids] (filter some? animation-ids)))
    ;(output id-counts        NameCounts          :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
-   (output node-outline     outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline own-build-errors]
+   (output node-outline     outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline child-outlines own-build-errors]
                                                                {:node-id          _node-id
                                                                 :node-outline-key "Atlas"
                                                                 :label            "Atlas"
-                                                                :children         (into []
-                                                                                    (mapcat :children)
-                                                                                    (:children tpinfo-node-outline))
+                                                                :children         (concat
+                                                                                      (into []
+                                                                                      (mapcat :children)
+                                                                                      (:children tpinfo-node-outline))
+                                                                                      child-outlines)
                                                                 :icon             tpatlas-icon
                                                                 ;:outline-error?   (g/error-fatal? own-build-errors)
                                                                 ;:child-reqs       [{:node-type    AtlasImage
@@ -742,6 +765,128 @@
    ;                                                                 own-build-errors)))
             )
 
+;; *******************************************************************************************************************
+
+(defn- unique-id-error [node-id id id-counts]
+  (or (validation/prop-error :fatal node-id :id validation/prop-empty? id "Id")
+      (validation/prop-error :fatal node-id :id (partial validation/prop-id-duplicate? id-counts) id)))
+
+(defn- validate-animation-id [node-id id id-counts]
+  (unique-id-error node-id id id-counts))
+
+(defn- validate-animation-fps [node-id fps]
+  (validation/prop-error :fatal node-id :fps validation/prop-negative? fps "Fps"))
+
+; Structure that holds all information for an animation with multiple frames
+(g/defnode AtlasAnimation
+  (inherits core/Scope)
+  (inherits outline/OutlineNode)
+
+  (property id g/Str
+            ;(dynamic error (g/fnk [_node-id id id-counts] (validate-animation-id _node-id id id-counts)))
+            )
+  (property fps g/Int
+            (default 30)
+            (dynamic error (g/fnk [_node-id fps] (validate-animation-fps _node-id fps))))
+  (property flip-horizontal g/Bool)
+  (property flip-vertical   g/Bool)
+  (property playback        types/AnimationPlayback
+            (dynamic edit-type (g/constantly (properties/->pb-choicebox Tile$Playback))))
+
+  (output child->order g/Any :cached (g/fnk [nodes] (zipmap nodes (range))))
+
+  (input atlas-images Image :array)
+  (output atlas-images [Image] (gu/passthrough atlas-images))
+
+  (input img-ddf g/Any :array)
+  (input child-scenes g/Any :array)
+  (input child-build-errors g/Any :array)
+  ;(input id-counts NameCounts)
+  (input anim-data g/Any)
+  ;
+  ;(input layout-size g/Any)
+  ;(output layout-size g/Any (gu/passthrough layout-size))
+
+  ;(input rename-patterns g/Str)
+  ;(output rename-patterns g/Str (gu/passthrough rename-patterns))
+
+  ;(input image-resources g/Any :array)
+  ;(output image-resources g/Any (gu/passthrough image-resources))
+  ;
+  ;(input image-path->rect g/Any)
+  ;(output image-path->rect g/Any (gu/passthrough image-path->rect))
+
+  (input gpu-texture g/Any)
+
+  (output animation Animation (g/fnk [id atlas-images fps flip-horizontal flip-vertical playback]
+                                (types/->Animation id atlas-images fps flip-horizontal flip-vertical playback)))
+
+  (output node-outline outline/OutlineData :cached
+          (g/fnk [_node-id child-outlines id own-build-errors]
+            {:node-id _node-id
+             :node-outline-key id
+             :label id
+             :children (sort-by :order child-outlines)
+             :icon animation-icon
+             :outline-error? (g/error-fatal? own-build-errors)
+             :child-reqs [{:node-type AtlasSourceImageNode
+                           :tx-attach-fn attach-image-to-animation}]}))
+  (output ddf-message g/Any :cached produce-anim-ddf)
+  (output updatable g/Any :cached produce-animation-updatable)
+  (output scene g/Any :cached produce-animation-scene)
+  (output own-build-errors g/Any (g/fnk [_node-id fps id ] ;id-counts
+                                   (g/package-errors _node-id
+                                                     ;(validate-animation-id _node-id id id-counts)
+                                                     (validate-animation-fps _node-id fps))))
+  (output build-errors g/Any (g/fnk [_node-id child-build-errors own-build-errors]
+                               (g/package-errors _node-id
+                                                 child-build-errors
+                                                 own-build-errors))))
+
+(defn- selection->atlas [selection] (handler/adapt-single selection TPAtlasNode))
+
+(def ^:private default-animation
+  {:flip-horizontal false
+   :flip-vertical false
+   :fps 24
+   :playback :playback-loop-forward
+   :id "New Animation"})
+
+(defn- make-atlas-animation [atlas-node anim]
+  (let [graph-id (g/node-id->graph-id atlas-node)
+        ;project (project/get-project atlas-node)
+        ;workspace (project/workspace project)
+        ;image-msgs (resolve-image-msgs workspace (:images anim) false)
+        ]
+    (g/make-nodes
+      graph-id
+      [atlas-anim [AtlasAnimation :flip-horizontal (:flip-horizontal anim) :flip-vertical (:flip-vertical anim)
+                   :fps (:fps anim) :playback (:playback anim) :id (:id anim)]]
+      (attach-animation-to-atlas atlas-node atlas-anim)
+      ;(make-image-nodes-in-animation atlas-anim image-msgs)
+      )))
+
+(defn- add-animation-group-handler [app-view atlas-node]
+  (let [op-seq (gensym)
+        [animation-node] (g/tx-nodes-added
+                           (g/transact
+                             (concat
+                               (g/operation-sequence op-seq)
+                               (g/operation-label "Add Animation Group")
+                               (make-atlas-animation atlas-node default-animation))))
+        ]
+    ()
+    #_(g/transact
+      (concat
+        (g/operation-sequence op-seq)
+        (app-view/select app-view [animation-node])))))
+
+(handler/defhandler :add :workbench
+  (label [] "Add Animation Group")
+  (active? [selection] (selection->atlas selection))
+  (run [app-view selection] (add-animation-group-handler app-view (selection->atlas selection))))
+
+;; *******************************************************************************************************************
 
 (defn register-resource-types [workspace]
   (concat
