@@ -82,6 +82,9 @@
 (defn- plugin-create-atlas [path tpinfo-as-bytes]
   (plugin-invoke-static tp-plugin-cls "createAtlas" (into-array Class [string-cls byte-array-cls]) [path tpinfo-as-bytes]))
 
+
+(g/deftype ^:private NameCounts {s/Str s/Int})
+
 (g/defnk produce-tpinfo-scene
   [_node-id atlas]
   (let [
@@ -134,6 +137,9 @@
              (value (g/fnk [width height] [width height]))
              (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
              (dynamic read-only? (g/constantly true)))
+
+  (input images g/Any :array)
+  (output images g/Any (gu/passthrough images))
 
   (input child-scenes g/Any :array)
   (input child-outlines g/Any :array)
@@ -368,7 +374,10 @@
 
 ; saving the .tpatlas file
 (g/defnk produce-tpatlas-save-value [file]
-  (cond-> {:file (resource/resource->proj-path file)}))
+  (cond-> {:file (resource/resource->proj-path file)
+           ;:rename_patterns ""
+           ;:animations anim-ddf
+           }))
 
 ;; (defn- validate-layout-properties [node-id margin inner-padding extrude-borders]
 ;;   (when-some [errors (->> [(validate-margin node-id margin)
@@ -645,6 +654,13 @@
 ;                    [path (->AtlasRect path x (- h height y) width height page)]))
 ;          layout-rects)))
 
+(g/defnk produce-name-to-image-map [tpinfo-images]
+  (let [node-ids tpinfo-images
+        names (map (fn [id] (g/node-value id :name)) node-ids)
+        name-image-map (zipmap names node-ids)]
+    name-image-map))
+
+; TODO Sort the image entries
 (defn- atlas-outline-sort-by-fn [v]
   [(:name (g/node-type* (:node-id v)))])
 
@@ -661,6 +677,7 @@
                                              [:atlas :atlas]
                                              [:size :tpinfo-size]
                                              [:images :tpinfo-images]
+                                             [:frame-ids :tpinfo-frame-ids]
                                              )))
              (dynamic edit-type (g/constantly {:type resource/Resource :ext tpinfo-file-ext}))
              (dynamic error (g/fnk [_node-id file]
@@ -668,7 +685,8 @@
 
    (input tpinfo-file-resource resource/Resource)
    (input tpinfo-node-outline g/Any)
-   (input tpinfo-images g/Any) ; node id's to each AtlasSourceImageNode
+   (input tpinfo-images g/Any)    ; node id's for each AtlasSourceImageNode
+   (input tpinfo-frame-ids g/Any) ; List of static frame id's from the .tpinfo file
 
    (input tpinfo g/Any) ; map of Atlas.Info from tpinfo_ddf.proto
    (input atlas g/Any) ; type Atlas from Atlas.java
@@ -688,10 +706,12 @@
    (input texture-profiles g/Any)
 
    (input animations Animation :array)
+   (input name-to-image-map g/Any :cached produce-name-to-image-map)
+   
    ;(input animation-images [Image] :array)
    ;(input img-ddf g/Any :array)
    (input anim-ddf g/Any :array) ; Array of protobuf maps for each manually created animation
-   (input animation-ids g/Str :array) ; List of the manually create animation ids
+   (input animation-ids g/Str :array) ; List of the manually created animation ids
 
    (input child-scenes g/Any :array)
    (input child-build-errors g/Any :array)
@@ -743,7 +763,7 @@
    ;
    ;(output anim-data        g/Any               :cached produce-anim-data)
    ;(output image-path->rect g/Any               :cached produce-image-path->rect)
-   (output anim-ids         g/Any               :cached (g/fnk [animation-ids] (filter some? animation-ids)))
+   (output anim-ids         g/Any               :cached (g/fnk [animation-ids tpinfo-frame-ids] (filter some? (concat animation-ids tpinfo-frame-ids))))
    (output id-counts        NameCounts          :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
    (output node-outline     outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline child-outlines own-build-errors]
@@ -814,6 +834,10 @@
 
   ; A map from id to id frequency (to detect duplicate names)
   (input id-counts NameCounts)
+  ; A map from source image name to the node id of the AtlasSourceImageNode
+  (input name-to-image-map g/Any)
+
+
   (input img-ddf g/Any :array)
   (input child-scenes g/Any :array)
   (input child-build-errors g/Any :array)
@@ -859,6 +883,8 @@
                                                  own-build-errors))))
 
 (defn- selection->atlas [selection] (handler/adapt-single selection TPAtlasNode))
+(defn- selection->animation [selection] (handler/adapt-single selection AtlasAnimation))
+(defn- selection->image [selection] (handler/adapt-single selection AtlasSourceImageNode))
 
 (def ^:private default-animation
   {:flip-horizontal false
@@ -887,19 +913,66 @@
                            (g/transact
                              (concat
                                (g/operation-sequence op-seq)
-                               (g/operation-label "Add Animation Group")
+                               (g/operation-label "Add Animation")
                                (make-atlas-animation atlas-node default-animation))))
         ]
     ()
-    #_(g/transact
+    (g/transact
       (concat
         (g/operation-sequence op-seq)
         (app-view/select app-view [animation-node])))))
 
 (handler/defhandler :add :workbench
-  (label [] "Add Animation Group")
+  (label [] "Add Animation")
   (active? [selection] (selection->atlas selection))
   (run [app-view selection] (add-animation-group-handler app-view (selection->atlas selection))))
+
+
+(defn- add-images-handler [app-view workspace project parent accept-fn] ; parent = new parent of images
+  (when-some [id-counts (g/node-value parent :id-counts)
+              ;image-resources (seq (resource-dialog/make workspace project
+              ;                                           {:ext image/exts
+              ;                                            :title "Select Images"
+              ;                                            :selection :multiple
+              ;                                            :accept-fn accept-fn}))
+              ]
+    (prn "MAWE add-images-handler" id-counts)
+    ()
+    #_(let [op-seq (gensym)
+          image-msgs (map #(assoc default-image-msg :image %) image-resources)
+          image-nodes (g/tx-nodes-added
+                        (g/transact
+                          (concat
+                            (g/operation-sequence op-seq)
+                            (g/operation-label "Add Images")
+                            (cond
+                              ;(g/node-instance? TPAtlasNode parent)
+                              ;(make-image-nodes-in-atlas parent image-msgs)
+
+                              ; Since the atlas is currently fixes, we only allow adding images to the AtlasAnimation
+                              (g/node-instance? AtlasAnimation parent)
+                              (make-image-nodes-in-animation parent image-msgs)
+
+                              :else
+                              (let [parent-node-type @(g/node-type* parent)]
+                                (throw (ex-info (str "Unsupported parent type " (:name parent-node-type))
+                                                {:parent-node-type parent-node-type})))))))]
+      (g/transact
+        (concat
+          (g/operation-sequence op-seq)
+          (app-view/select app-view image-nodes))))))
+
+(handler/defhandler :add-from-file :workbench
+  (label [] "Add Images...")
+  (active? [selection] (selection->animation selection))
+  (run [app-view project selection]
+    (let [atlas (selection->atlas selection)]
+      (when-some [parent-node (or atlas (selection->animation selection))]
+        (let [workspace (project/workspace project)
+              accept-fn (if atlas
+                          ;(complement (set (g/node-value atlas :image-resources)))
+                          (constantly true))]
+          (add-images-handler app-view workspace project parent-node accept-fn))))))
 
 ;; *******************************************************************************************************************
 
