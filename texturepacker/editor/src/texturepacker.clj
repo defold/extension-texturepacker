@@ -45,6 +45,7 @@
            [org.apache.commons.io IOUtils]
            [java.io IOException]
            [java.nio FloatBuffer IntBuffer]
+           [java.util List]
            [javax.vecmath Matrix4d Vector3d Vector4d]
            [editor.types Animation Image AABB]
            [com.dynamo.gamesys.proto Tile$Playback Tile$SpriteTrimmingMode]
@@ -62,11 +63,11 @@
 
 ; Plugin functions (from Atlas.java)
 
- ;(defn- debug-cls [^Class cls]
- ;  (doseq [m (.getMethods cls)]
- ;    (prn (.toString m))
- ;    (println "Method Name: " (.getName m) "(" (.getParameterTypes m) ")")
- ;    (println "Return Type: " (.getReturnType m) "\n")))
+;(defn- debug-cls [^Class cls]
+;  (doseq [m (.getMethods cls)]
+;    (prn (.toString m))
+;    (println "Method Name: " (.getName m) "(" (.getParameterTypes m) ")")
+;    (println "Return Type: " (.getReturnType m) "\n")))
 ;; TODO: Support public variables as well
 
 (def tp-plugin-tpinfo-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Atlas"))
@@ -168,6 +169,8 @@
             (dynamic read-only? (g/constantly true)))
 
   (output label g/Any :cached (g/fnk [name] (format "%s" name)))
+
+  (input rename-patterns g/Str)
 
   ;(property trimmed g/Bool :cached
   ;            (g/fnk [sprite] (.trimmed sprite))
@@ -327,16 +330,18 @@
 (defn- renderable->texture-set-pb [renderable]
   (get-in renderable [:user-data :texture-set-pb]))
 
+;; *******************************************************************************************************************
+
 (defn- attach-image-to-animation [animation-node image-node]
   (concat
     (g/connect image-node :_node-id animation-node :nodes)
     ;(g/connect image-node :atlas-image animation-node :atlas-images)
     ;(g/connect image-node :build-errors animation-node :child-build-errors)
-    ;(g/connect image-node :ddf-message animation-node :img-ddf)
+    (g/connect image-node :ddf-message animation-node :img-ddf)
     ;(g/connect image-node :image-resource animation-node :image-resources)
     (g/connect image-node :node-outline animation-node :child-outlines)
     ;(g/connect image-node :scene animation-node :child-scenes)
-    ;(g/connect animation-node :child->order image-node :child->order)
+    (g/connect animation-node :child->order image-node :child->order)
     ;(g/connect animation-node :image-path->rect image-node :image-path->rect)
     ;(g/connect animation-node :layout-size image-node :layout-size)
     ;(g/connect animation-node :updatable image-node :animation-updatable)
@@ -364,41 +369,198 @@
     ;(g/connect atlas-node     :layout-size      animation-node :layout-size)
     ;(g/connect atlas-node     :image-path->rect animation-node :image-path->rect)
     #_(g/connect atlas-node :rename-patterns animation-node :rename-patterns)))
+
+;; *******************************************************************************************************************
+;; AtlasAnimation
+
+(defn- sort-by-and-strip-order [images]
+  (->> images
+       (sort-by :order)
+       (map #(dissoc % :order))))
+
+(defn- update-int->bool [keys m]
+  (reduce (fn [m key]
+            (if (contains? m key)
+              (update m key (complement zero?))
+              m))
+          m
+          keys))
+
+(def ^:private default-animation
+  {:flip-horizontal false
+   :flip-vertical false
+   :fps 24
+   :playback :playback-loop-forward
+   :id "New Animation"})
+
+(defn- unique-id-error [node-id id id-counts]
+  (or (validation/prop-error :fatal node-id :id validation/prop-empty? id "Id")
+      (validation/prop-error :fatal node-id :id (partial validation/prop-id-duplicate? id-counts) id)))
+
+(defn- validate-animation-id [node-id id id-counts]
+  (unique-id-error node-id id id-counts))
+
+(defn- validate-animation-fps [node-id fps]
+  (validation/prop-error :fatal node-id :fps validation/prop-negative? fps "Fps"))
+
+(g/defnk produce-anim-ddf [id fps flip-horizontal flip-vertical playback img-ddf]
+  {:id id
+   :fps fps
+   :flip-horizontal flip-horizontal
+   :flip-vertical flip-vertical
+   :playback playback
+   :images (sort-by-and-strip-order img-ddf)})
+
+; Holds the name and produces the ddf-message
+(g/defnode AtlasAnimationImage
+  (inherits outline/OutlineNode)
+  (property name g/Str (dynamic read-only? (g/constantly true)))
+
+  (input rename-patterns g/Str)
+
+  (input child->order g/Any)
+  (output order g/Any (g/fnk [_node-id child->order]
+                        (child->order _node-id)))
+
+  (output ddf-message g/Any (g/fnk [name order]
+                              {:image name :order order :sprite-trim-mode :sprite-trim-mode-off}))
+  (output node-outline outline/OutlineData (g/fnk [_node-id name]
+                                             {:node-id _node-id
+                                              :node-outline-key name
+                                              :label name
+                                              :icon animation-icon
+                                              :read-only true})))
+
+
+;(input child->order g/Any)
+;(output order g/Any (g/fnk [_node-id child->order]
+;                      (child->order _node-id)))
+;
+;(output ddf-message g/Any (g/fnk [name order]
+;                            {:image name :order order :sprite-trim-mode :sprite-trim-mode-off}))
+
+; Structure that holds all information for an animation with multiple frames
+(g/defnode AtlasAnimation
+  (inherits core/Scope)
+  (inherits outline/OutlineNode)
+
+  (property id g/Str (dynamic error (g/fnk [_node-id id id-counts] (validate-animation-id _node-id id id-counts))))
+  (property fps g/Int
+            (default 24)
+            (dynamic error (g/fnk [_node-id fps] (validate-animation-fps _node-id fps))))
+  (property flip-horizontal g/Bool)
+  (property flip-vertical g/Bool)
+  (property playback types/AnimationPlayback
+            (dynamic edit-type (g/constantly (properties/->pb-choicebox Tile$Playback))))
+
+  (output child->order g/Any :cached (g/fnk [nodes] (zipmap nodes (range))))
+
+  (input atlas-images Image :array)
+  (output atlas-images [Image] (gu/passthrough atlas-images))
+
+  ; A map from id to id frequency (to detect duplicate names)
+  (input id-counts NameCounts)
+  ; A list of the static frame ids from the texture packer
+  (input frame-ids g/Any)
+  ; A map from source image name to the node id of the AtlasSourceImageNode
+  (input name-to-image-map g/Any)
+
+
+  (input child-scenes g/Any :array)
+  (input child-build-errors g/Any :array)
+  (input anim-data g/Any)
+  ;
+  ;(input layout-size g/Any)
+  ;(output layout-size g/Any (gu/passthrough layout-size))
+
+  ;(input rename-patterns g/Str)
+  ;(output rename-patterns g/Str (gu/passthrough rename-patterns))
+
+  ;(input image-resources g/Any :array)
+  ;(output image-resources g/Any (gu/passthrough image-resources))
+  ;
+  ;(input image-path->rect g/Any)
+  ;(output image-path->rect g/Any (gu/passthrough image-path->rect))
+
+  (input gpu-texture g/Any)
+
+  (output animation Animation (g/fnk [id atlas-images fps flip-horizontal flip-vertical playback]
+                                (types/->Animation id atlas-images fps flip-horizontal flip-vertical playback)))
+
+  (output node-outline outline/OutlineData :cached
+          (g/fnk [_node-id child-outlines id own-build-errors]
+            {:node-id _node-id
+             :node-outline-key id
+             :label id
+             :children (sort-by :order child-outlines)
+             :icon animation-icon
+             :outline-error? (g/error-fatal? own-build-errors)
+             :child-reqs [{:node-type AtlasAnimationImage
+                           :tx-attach-fn attach-image-to-animation}]}))
+
+  (input img-ddf g/Any :array)
+  (output ddf-message g/Any :cached produce-anim-ddf)
+  (output updatable g/Any :cached produce-animation-updatable)
+  (output scene g/Any :cached produce-animation-scene)
+  (output own-build-errors g/Any (g/fnk [_node-id fps id id-counts]
+                                   (g/package-errors _node-id
+                                                     (validate-animation-id _node-id id id-counts)
+                                                     (validate-animation-fps _node-id fps))))
+  (output build-errors g/Any (g/fnk [_node-id child-build-errors own-build-errors]
+                               (g/package-errors _node-id
+                                                 child-build-errors
+                                                 own-build-errors))))
+
+
+(defn- make-image-nodes [attach-fn parent image-names]
+  (let [graph-id (g/node-id->graph-id parent)]
+    (for [image-name image-names]
+      (g/make-nodes
+        graph-id
+        [atlas-image [AtlasAnimationImage {:name image-name}]]
+        (attach-fn parent atlas-image)))))
+
+(def ^:private make-image-nodes-in-animation (partial make-image-nodes attach-image-to-animation))
+
+(defn- make-atlas-animation [atlas-node anim]
+  (let [graph-id (g/node-id->graph-id atlas-node)
+        images (:images anim)
+        image-names (map (fn [image] (:image image)) images)]
+    (g/make-nodes
+      graph-id
+      [atlas-anim [AtlasAnimation :flip-horizontal (:flip-horizontal anim) :flip-vertical (:flip-vertical anim)
+                   :fps (:fps anim) :playback (:playback anim) :id (:id anim)]]
+      (concat
+        (attach-animation-to-atlas atlas-node atlas-anim)
+        (make-image-nodes-in-animation atlas-anim image-names)))))
+
 ; .tpatlas file
 (defn load-tpatlas-file [project self resource tpatlas]
   (let [tpinfo-resource (workspace/resolve-resource resource (:file tpatlas))
+        animations (map (partial update-int->bool [:flip-horizontal :flip-vertical]) (:animations tpatlas))
         tx-data (concat
                   (g/connect project :build-settings self :build-settings)
                   (g/connect project :texture-profiles self :texture-profiles)
                   (g/set-property self
-                    ;:tpatlas tpatlas
-                    :file tpinfo-resource))
-        ;; TODO: Add custom animations here as well
-        ]
+                    :file tpinfo-resource
+                    :rename-patterns (:rename-patterns tpatlas))
+                  (map (fn [animation] (make-atlas-animation self animation)) animations))]
     tx-data))
 
 
 ; saving the .tpatlas file
-(g/defnk produce-tpatlas-save-value [file]
+(g/defnk produce-tpatlas-save-value [file anim-ddf]
   (cond-> {:file (resource/resource->proj-path file)
            ;:rename_patterns ""
-           ;:animations anim-ddf
+           :animations anim-ddf
            }))
 
-;; (defn- validate-layout-properties [node-id margin inner-padding extrude-borders]
-;;   (when-some [errors (->> [(validate-margin node-id margin)
-;;                            (validate-inner-padding node-id inner-padding)
-;;                            (validate-extrude-borders node-id extrude-borders)]
-;;                           (filter some?)
-;;                           (not-empty))]
-;;     (g/error-aggregate errors)))
+(defn- validate-rename-patterns [node-id rename-patterns]
+  (try
+    (AtlasUtil/validatePatterns rename-patterns)
+    (catch Exception error
+      (validation/prop-error :fatal node-id :rename-patterns identity (.getMessage error)))))
 
-;; (defn- validate-rename-patterns [node-id rename-patterns]
-;;   (try
-;;     (AtlasUtil/validatePatterns rename-patterns)
-;;     (catch Exception error
-;;       (validation/prop-error :fatal node-id :rename-patterns identity (.getMessage error)))))
-;
 ;(g/defnk produce-build-targets [_node-id resource texture-set texture-page-count packed-page-images-generator texture-profile build-settings build-errors]
 ;  (g/precluding-errors build-errors
 ;                       (let [project           (project/get-project _node-id)
@@ -666,10 +828,6 @@
         name-image-map (zipmap names node-ids)]
     name-image-map))
 
-; TODO Sort the image entries
-(defn- atlas-outline-sort-by-fn [v]
-  [(:name (g/node-type* (:node-id v)))])
-
 (g/defnode TPAtlasNode
   (inherits resource-node/ResourceNode)
 
@@ -704,8 +862,8 @@
             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
             (dynamic read-only? (g/constantly true)))
 
-  ; (property rename-patterns g/Str
-  ;           (dynamic error (g/fnk [_node-id rename-patterns] (validate-rename-patterns _node-id rename-patterns))))
+  (property rename-patterns g/Str
+            (dynamic error (g/fnk [_node-id rename-patterns] (validate-rename-patterns _node-id rename-patterns))))
 
   ; (output child->order g/Any :cached (g/fnk [nodes] (zipmap nodes (range))))
 
@@ -809,113 +967,13 @@
   ;                                                                 own-build-errors)))
   )
 
-;; *******************************************************************************************************************
-
-(defn- unique-id-error [node-id id id-counts]
-  (or (validation/prop-error :fatal node-id :id validation/prop-empty? id "Id")
-      (validation/prop-error :fatal node-id :id (partial validation/prop-id-duplicate? id-counts) id)))
-
-(defn- validate-animation-id [node-id id id-counts]
-  (unique-id-error node-id id id-counts))
-
-(defn- validate-animation-fps [node-id fps]
-  (validation/prop-error :fatal node-id :fps validation/prop-negative? fps "Fps"))
-
-; Structure that holds all information for an animation with multiple frames
-(g/defnode AtlasAnimation
-  (inherits core/Scope)
-  (inherits outline/OutlineNode)
-
-  (property id g/Str (dynamic error (g/fnk [_node-id id id-counts] (validate-animation-id _node-id id id-counts))))
-  (property fps g/Int
-            (default 24)
-            (dynamic error (g/fnk [_node-id fps] (validate-animation-fps _node-id fps))))
-  (property flip-horizontal g/Bool)
-  (property flip-vertical g/Bool)
-  (property playback types/AnimationPlayback
-            (dynamic edit-type (g/constantly (properties/->pb-choicebox Tile$Playback))))
-
-  (output child->order g/Any :cached (g/fnk [nodes] (zipmap nodes (range))))
-
-  (input atlas-images Image :array)
-  (output atlas-images [Image] (gu/passthrough atlas-images))
-
-  ; A map from id to id frequency (to detect duplicate names)
-  (input id-counts NameCounts)
-  ; A list of the static frame ids from the texture packer
-  (input frame-ids g/Any)
-  ; A map from source image name to the node id of the AtlasSourceImageNode
-  (input name-to-image-map g/Any)
-
-
-  (input img-ddf g/Any :array)
-  (input child-scenes g/Any :array)
-  (input child-build-errors g/Any :array)
-  (input anim-data g/Any)
-  ;
-  ;(input layout-size g/Any)
-  ;(output layout-size g/Any (gu/passthrough layout-size))
-
-  ;(input rename-patterns g/Str)
-  ;(output rename-patterns g/Str (gu/passthrough rename-patterns))
-
-  ;(input image-resources g/Any :array)
-  ;(output image-resources g/Any (gu/passthrough image-resources))
-  ;
-  ;(input image-path->rect g/Any)
-  ;(output image-path->rect g/Any (gu/passthrough image-path->rect))
-
-  (input gpu-texture g/Any)
-
-  (output animation Animation (g/fnk [id atlas-images fps flip-horizontal flip-vertical playback]
-                                (types/->Animation id atlas-images fps flip-horizontal flip-vertical playback)))
-
-  (output node-outline outline/OutlineData :cached
-          (g/fnk [_node-id child-outlines id own-build-errors]
-            {:node-id _node-id
-             :node-outline-key id
-             :label id
-             :children (sort-by :order child-outlines)
-             :icon animation-icon
-             :outline-error? (g/error-fatal? own-build-errors)
-             :child-reqs [{:node-type AtlasSourceImageNode
-                           :tx-attach-fn attach-image-to-animation}]}))
-  (output ddf-message g/Any :cached produce-anim-ddf)
-  (output updatable g/Any :cached produce-animation-updatable)
-  (output scene g/Any :cached produce-animation-scene)
-  (output own-build-errors g/Any (g/fnk [_node-id fps id id-counts]
-                                   (g/package-errors _node-id
-                                                     (validate-animation-id _node-id id id-counts)
-                                                     (validate-animation-fps _node-id fps))))
-  (output build-errors g/Any (g/fnk [_node-id child-build-errors own-build-errors]
-                               (g/package-errors _node-id
-                                                 child-build-errors
-                                                 own-build-errors))))
+;; **************************************************************************************************
+;; Outline handlers
 
 (defn- selection->atlas [selection] (handler/adapt-single selection TPAtlasNode))
 (defn- selection->animation [selection] (handler/adapt-single selection AtlasAnimation))
-(defn- selection->image [selection] (handler/adapt-single selection AtlasSourceImageNode))
+(defn- selection->image [selection] (handler/adapt-single selection AtlasAnimationImage))
 
-(def ^:private default-animation
-  {:flip-horizontal false
-   :flip-vertical false
-   :fps 24
-   :playback :playback-loop-forward
-   :id "New Animation"})
-
-(defn- make-atlas-animation [atlas-node anim]
-  (let [graph-id (g/node-id->graph-id atlas-node)
-        ;project (project/get-project atlas-node)
-        ;workspace (project/workspace project)
-        ;image-msgs (resolve-image-msgs workspace (:images anim) false)
-        ]
-    (g/make-nodes
-      graph-id
-      [atlas-anim [AtlasAnimation :flip-horizontal (:flip-horizontal anim) :flip-vertical (:flip-vertical anim)
-                   :fps (:fps anim) :playback (:playback anim) :id (:id anim)]]
-      (attach-animation-to-atlas atlas-node atlas-anim)
-      ;(make-image-nodes-in-animation atlas-anim image-msgs)
-      )))
 
 (defn- add-animation-group-handler [app-view atlas-node]
   (let [op-seq (gensym)
@@ -939,14 +997,12 @@
 
 
 (defn- add-images-handler [app-view workspace project parent accept-fn] ; parent = new parent of images
-  (let [name-to-image-map (g/node-value parent :name-to-image-map)
-        frame-ids (map first name-to-image-map)
+  (let [frame-ids (g/node-value parent :frame-ids)
         frame-id-items (map (fn [t] {:text t}) frame-ids)]
     (when-some [items (seq (dialogs/make-select-list-dialog frame-id-items
                                                             (:title "Select frames")))]
       (let [op-seq (gensym)
             image-text (:text (first items))
-            image-id (get name-to-image-map image-text) ; the node id of the AtlasSourceImageNode
 
             image-nodes (g/tx-nodes-added
                           (g/transact
@@ -956,7 +1012,7 @@
                               (cond
                                 ; Since the atlas is currently fixed, we only allow adding images to the AtlasAnimation
                                 (g/node-instance? AtlasAnimation parent)
-                                (attach-image-to-animation parent image-id)
+                                (make-image-nodes-in-animation parent [image-text])
 
                                 :else
                                 (let [parent-node-type @(g/node-type* parent)]
@@ -979,6 +1035,57 @@
                              ;(complement (set (g/node-value atlas :image-resources)))
                              (constantly true))]
              (add-images-handler app-view workspace project parent-node accept-fn))))))
+
+
+(defn- vec-move
+  [v x offset]
+  (let [current-index (.indexOf ^java.util.List v x)
+        new-index (max 0 (+ current-index offset))
+        [before after] (split-at new-index (remove #(= x %) v))]
+    (vec (concat before [x] after))))
+
+(defn- move-node!
+  [node-id offset]
+  (let [parent (core/scope node-id)
+        children (vec (g/node-value parent :nodes))
+        new-children (vec-move children node-id offset)
+        connections (keep (fn [[source source-label target target-label]]
+                            (when (and (= source node-id)
+                                       (= target parent))
+                              [source-label target-label]))
+                          (g/outputs node-id))]
+    (g/transact
+      (concat
+        (for [child children
+              [source target] connections]
+          (g/disconnect child source parent target))
+        (for [child new-children
+              [source target] connections]
+          (g/connect child source parent target))))))
+
+(defn- move-active? [selection]
+  (some->> selection
+           selection->image
+           core/scope
+           (g/node-instance? AtlasAnimation)))
+
+(handler/defhandler :move-up :workbench
+  (active? [selection] (move-active? selection))
+  (enabled? [selection] (let [node-id (selection->image selection)
+                              parent (core/scope node-id)
+                              ^List children (vec (g/node-value parent :nodes))
+                              node-child-index (.indexOf children node-id)]
+                          (pos? node-child-index)))
+  (run [selection] (move-node! (selection->image selection) -1)))
+
+(handler/defhandler :move-down :workbench
+  (active? [selection] (move-active? selection))
+  (enabled? [selection] (let [node-id (selection->image selection)
+                              parent (core/scope node-id)
+                              ^List children (vec (g/node-value parent :nodes))
+                              node-child-index (.indexOf children node-id)]
+                          (< node-child-index (dec (.size children)))))
+  (run [selection] (move-node! (selection->image selection) 1)))
 
 ;; *******************************************************************************************************************
 
