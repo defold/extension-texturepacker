@@ -171,8 +171,9 @@ public class AtlasBuilder extends Builder<Void> {
         return out;
     }
 
-    static private TextureSetLayout.Page createPage(Info.Page srcPage) {
+    static private TextureSetLayout.Page createPage(int index, Info.Page srcPage) {
         TextureSetLayout.Page page = new TextureSetLayout.Page();
+        page.index = index;
         page.name = srcPage.getName();
         page.images = new ArrayList<>();
         page.size = AtlasBuilder.createSize(srcPage.getSize());
@@ -185,8 +186,9 @@ public class AtlasBuilder extends Builder<Void> {
 
     static public List<TextureSetLayout.Page> createPages(Info.Atlas srcAtlas) {
         List<TextureSetLayout.Page> outPages = new ArrayList<>();
+        int index = 0;
         for (Info.Page srcPage : srcAtlas.getPagesList()) {
-            outPages.add(AtlasBuilder.createPage(srcPage));
+            outPages.add(AtlasBuilder.createPage(index++, srcPage));
         }
         return outPages;
     }

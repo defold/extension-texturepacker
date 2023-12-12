@@ -27,6 +27,7 @@
             [editor.defold-project :as project]
             [editor.resource :as resource]
             [editor.resource-node :as resource-node]
+            [editor.scene-picking :as scene-picking]
     ;; [editor.render :as render]
             [editor.types :as types]
             [editor.validation :as validation]
@@ -212,8 +213,9 @@
       (.setTranslation (Vector3d. page-offset 0.0 0.0)))))
 
 ; page is of type TextureSetLayout$Page
-(defn- produce-page-renderables [page-index page gpu-texture]
+(defn- produce-page-renderables [page gpu-texture]
   (let [size (.size page)
+        page-index (.index page)
         page-width (.width size)
         page-height (.height size)
         aabb (types/->AABB (Point3d. 0 0 0) (Point3d. page-width page-height 0))]
@@ -224,20 +226,17 @@
                               :vbuf (gen-page-rect-vertex-buffer page-width page-height page-index)}
                   :tags #{:atlas}
                   :passes [pass/transparent]}
-     :children [{:aabb aabb
-                 :renderable {:render-fn render-atlas-outline
-                              :tags #{:atlas :outline}
-                              :passes [pass/outline]}}]}))
+     :children (concat [{:aabb aabb
+                         :renderable {:render-fn render-atlas-outline
+                                      :tags #{:atlas :outline}
+                                      :passes [pass/outline]}}])}))
 
-(g/defnk produce-tpinfo-scene [_node-id width height aabb pages gpu-texture]
+(g/defnk produce-tpinfo-scene [_node-id width height pages child-scenes gpu-texture]
   (let [num-pages (count pages)
-        child-renderables (map-indexed (fn [idx page] (produce-page-renderables idx page gpu-texture)) pages)
-        ]
+        child-renderables (map (fn [page] (produce-page-renderables page gpu-texture)) pages)]
     {:info-text (format "TexturePacker File (.tpinfo): %d pages %d x %d" num-pages (int width) (int height))
-     :children child-renderables
-     ;:children (into child-renderables
-     ;                child-scenes)
-     }))
+     :children (into child-renderables
+                     child-scenes)}))
 
 (g/defnk produce-tpatlas-scene [_node-id size atlas texture-profiles tpinfo-scene]
   (let [[width height] size
@@ -303,6 +302,9 @@
                                           {:min-filter gl/nearest
                                            :mag-filter gl/nearest}))))
 
+  (input nodes g/Any :array)
+  (output child->order g/Any :cached (g/fnk [nodes] (zipmap nodes (range))))
+
   (input child-scenes g/Any :array)
   (input child-outlines g/Any :array)
 
@@ -318,11 +320,100 @@
 
 (set! *warn-on-reflection* false)
 
+
+(defn- render-rect [^GL2 gl rect color offset-x]
+  (let [x0 (+ offset-x (:x rect))
+        y0 (:y rect)
+        x1 (+ x0 (:width rect))
+        y1 (+ y0 (:height rect))
+        [cr cg cb ca] color]
+    (.glColor4d gl cr cg cb ca)
+    (.glBegin gl GL2/GL_QUADS)
+    (.glVertex3d gl x0 y0 0)
+    (.glVertex3d gl x0 y1 0)
+    (.glVertex3d gl x1 y1 0)
+    (.glVertex3d gl x1 y0 0)
+    (.glEnd gl)))
+
+(defn render-image-outline
+  [^GL2 gl render-args renderables]
+  (doseq [renderable renderables]
+    (let [user-data (-> renderable :user-data)
+          page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))
+          color (colors/renderable-outline-color renderable)]
+      (render-rect gl (:rect user-data) color page-offset-x)))
+  (doseq [renderable renderables]
+    (let [user-data (-> renderable :user-data)
+          page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))]
+      (when (= (-> renderable :updatable :state :frame) (:order user-data))
+        (render-rect gl (:rect user-data) colors/defold-pink page-offset-x)))))
+
+(defn- render-image-outlines
+  [^GL2 gl render-args renderables n]
+  (condp = (:pass render-args)
+    pass/outline
+    (render-image-outline gl render-args renderables)))
+
+(defn- render-image-selection
+  [^GL2 gl render-args renderables n]
+  (assert (= (:pass render-args) pass/selection))
+  (assert (= n 1))
+  (let [renderable (first renderables)
+        picking-id (:picking-id renderable)
+        id-color (scene-picking/picking-id->color picking-id)
+        user-data (-> renderable :user-data)
+        page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))]
+    (render-rect gl (:rect user-data) id-color page-offset-x)))
+
+(defn- atlas-rect->editor-rect [rect]
+  (types/->Rect (:path rect) (:x rect) (:y rect) (:width rect) (:height rect)))
+
+; Flips the y -> page-height - y
+(defn- to-rect [name page-height rect]
+  {:path name :x (.x rect) :y (- page-height (.y rect) (.height rect)) :width (.width rect) :height (.height rect)})
+
+(g/defnk produce-image-scene [_node-id name image order page]
+  (let [size (.size page)
+        page-width (.width size)
+        page-height (.height size)
+        rect (to-rect name page-height (.rect image))
+        editor-rect (atlas-rect->editor-rect rect)
+        aabb (geom/rect->aabb editor-rect)
+        page-index (.index page)]
+    {:node-id _node-id
+     :aabb aabb
+     :renderable {:render-fn render-image-outlines
+                  :tags #{:atlas :outline}
+                  :batch-key ::atlas-image
+                  :user-data {:rect rect
+                              :order order
+                              :layout-width page-width
+                              :page-index page-index}
+                  :passes [pass/outline]}
+     :children [{:aabb aabb
+                 :node-id _node-id
+                 :renderable {:render-fn render-image-selection
+                              :tags #{:atlas}
+                              :user-data {:rect rect
+                                          :layout-width page-width
+                                          :page-index page-index}
+                              :passes [pass/selection]}}]
+     ;:updatable animation-updatable
+     }))
+
 ; See TextureSetLayer$SourceImage
 (g/defnode AtlasSourceImageNode
   (inherits outline/OutlineNode)
   (property name g/Str (dynamic read-only? (g/constantly true)))
-  (property image g/Any (dynamic visible (g/constantly false)))
+  (property image g/Any (dynamic visible (g/constantly false))) ; TextureSetLayout$SourceImage
+
+  (property size types/Vec2
+            (value (g/fnk [image] (let [rect (.rect image)
+                                        width (.width rect)
+                                        height (.height rect)]
+                                    [width height])))
+            (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
+            (dynamic read-only? (g/constantly true)))
 
   (property rotated g/Bool
             (value (g/fnk [image] (.rotated image)))
@@ -330,8 +421,15 @@
 
   (output label g/Any :cached (g/fnk [name] (format "%s" name)))
 
+  (input page g/Any)
+  (input frame-ids g/Any)
   (input rename-patterns g/Str)
 
+  ;(input child->order g/Any)
+  ;(output order g/Any (g/fnk [_node-id child->order]
+  ;                      (child->order _node-id)))
+
+  (output order g/Any :cached (g/fnk [frame-ids] (.indexOf frame-ids name)))
   ;(property trimmed g/Bool :cached
   ;            (g/fnk [sprite] (.trimmed sprite))
   ;            (dynamic read-only? (g/constantly true)))
@@ -347,6 +445,7 @@
 
 
   ;(output transform Matrix4d :cached produce-transform)
+  (output scene g/Any produce-image-scene)
 
   (output node-outline outline/OutlineData (g/fnk [_node-id name label]
                                              {:node-id _node-id
@@ -382,13 +481,16 @@
                                               :children child-outlines
                                               :read-only true})))
 
-(defn- create-image-node [tpinfo-id parent-id image]
+(defn- create-image-node [tpinfo-id page-id image]
   (let [name (.name image)
-        parent-graph-id (g/node-id->graph-id parent-id)
+        parent-graph-id (g/node-id->graph-id page-id)
         image-tx-data (g/make-nodes parent-graph-id [image-id [AtlasSourceImageNode :name name :image image]]
-                        (g/connect image-id :_node-id parent-id :nodes)
-                        (g/connect image-id :node-outline parent-id :child-outlines)
-                        (g/connect image-id :_node-id tpinfo-id :images))]
+                        (g/connect image-id :_node-id page-id :nodes)
+                        (g/connect image-id :node-outline page-id :child-outlines)
+                        (g/connect image-id :_node-id tpinfo-id :images)
+                        (g/connect image-id :scene tpinfo-id :child-scenes)
+                        (g/connect page-id :page image-id :page)
+                        (g/connect tpinfo-id :frame-ids image-id :frame-ids))]
     image-tx-data))
 
 (defn- create-image-nodes [tpinfo-id parent-id page]
@@ -570,8 +672,14 @@
 ;(output order g/Any (g/fnk [_node-id child->order]
 ;                      (child->order _node-id)))
 ;
-;(output ddf-message g/Any (g/fnk [name order]
-;                            {:image name :order order :sprite-trim-mode :sprite-trim-mode-off}))
+
+(defn render-animation
+  [^GL2 gl render-args renderables n]
+  (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx atlas-shader))
+
+(g/defnk produce-animation-updatable
+  [_node-id id anim-data]
+  (texture-set/make-animation-updatable _node-id "Atlas Animation" (get anim-data id)))
 
 ; Structure that holds all information for an animation with multiple frames
 (g/defnode AtlasAnimation
@@ -1027,7 +1135,7 @@
         ;out (g/node-value current :frame-ids)
         ;out (g/node-value current :animations)
         ;out (g/node-value current :anim-ids)
-        out (g/node-value current :aabb)
+        out (g/node-value current :child-scenes)
         ]
     out))
 
