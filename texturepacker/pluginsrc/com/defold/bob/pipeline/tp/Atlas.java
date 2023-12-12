@@ -70,12 +70,12 @@ public class Atlas {
                     .build();
     }
 
-    static public TextureImage createTexture(String path, Atlas atlas, List<BufferedImage> textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
+    static public TextureImage createTexture(String path, Atlas atlas, BufferedImage[] textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
         // TODO: Use a setting in .tpatlas / array_texture
         TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;
         boolean compress = textureProfile != null;
         //createMultiPageTexture(List<BufferedImage> images, TextureImage.Type textureType, TextureProfile texProfile, boolean compress)
-        return TextureUtil.createMultiPageTexture(textureImages, textureImageType, textureProfile, compress);
+        return TextureUtil.createMultiPageTexture(Arrays.asList(textureImages), textureImageType, textureProfile, compress);
     }
 
     private Info.Atlas createDebugAtlas() {
