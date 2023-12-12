@@ -206,8 +206,7 @@
         (.glEnd gl)))))
 
 (defn- get-rect-transform [width page-index]
-  (let [page-offset (get-rect-page-offset width page-index)
-        _ (prn "MAWE get-rect-transform" page-offset)]
+  (let [page-offset (get-rect-page-offset width page-index)]
     (doto (Matrix4d.)
       (.setIdentity)
       (.setTranslation (Vector3d. page-offset 0.0 0.0)))))
@@ -247,7 +246,7 @@
         ;child-renderables (into [] (for [[page-index page-rects] pages] (produce-page-renderables aabb width height page-index page-rects gpu-texture)))
         ]
     {:info-text (format "Atlas: %d pages %d x %d (%s profile)" num-pages (int width) (int height) (:name texture-profiles))
-     :children tpinfo-scene
+     :children [tpinfo-scene]
      ;:children (into child-renderables
      ;                child-scenes)
      }))
@@ -260,9 +259,6 @@
   (inherits outline/OutlineNode)
 
   (output path g/Str :cached (g/fnk [resource] (resource/path resource)))
-
-  ;(input scene-structure g/Any)
-  ;(output scene-structure g/Any (gu/passthrough scene-structure))
 
   (property tpinfo g/Any (dynamic visible (g/constantly false)))
   (property atlas g/Any (dynamic visible (g/constantly false)))
@@ -378,11 +374,6 @@
   (input nodes g/Any :array)
   (input child-outlines g/Any :array)
 
-  ;(output transform Matrix4d :cached produce-transform)
-  ;(output bone g/Any (g/fnk [name transform child-bones]
-  ;                          {:name name
-  ;                           :local-transform transform
-  ;                           :children child-bones}))
   (output node-outline outline/OutlineData (g/fnk [_node-id name label child-outlines]
                                              {:node-id _node-id
                                               :node-outline-key name
@@ -411,7 +402,6 @@
 
 (defn- create-page-node [tpinfo-id page]
   (let [name (.name page)
-        image-resource ()
         parent-graph-id (g/node-id->graph-id tpinfo-id)
         page-tx-data (g/make-nodes parent-graph-id [page-id [AtlasPageNode :name name :page page]]
                        (g/connect page-id :_node-id tpinfo-id :nodes)
@@ -454,11 +444,9 @@
                   (g/set-property self :layouts (.layouts atlas))
                   (g/set-property self :animations (.animations atlas))
                   (g/set-property self :page-names (.pageImageNames atlas))
-                  (g/set-property self :page-resources page-resources)
-                  )
+                  (g/set-property self :page-resources page-resources))
 
-        all-tx-data (concat tx-data (create-pages self atlas))
-        ]
+        all-tx-data (concat tx-data (create-pages self atlas))]
     all-tx-data))
 
 (set! *warn-on-reflection* true)
@@ -807,6 +795,7 @@
                                             [:page-resources :tpinfo-page-resources]
                                             [:scene :tpinfo-scene]
                                             [:aabb :aabb]
+                                            [:gpu-texture :gpu-texture]
                                             )))
             (dynamic edit-type (g/constantly {:type resource/Resource :ext tpinfo-file-ext}))
             (dynamic error (g/fnk [_node-id file]
@@ -850,29 +839,9 @@
 
   (output texture-profile g/Any (g/fnk [texture-profiles resource]
                                   (tex-gen/match-texture-profile-pb texture-profiles (resource/proj-path resource))))
-  ;
-  ;(output all-atlas-images [Image] :cached (g/fnk [animation-images]
-  ;                                                (into [] (distinct) (flatten animation-images))))
-  ;
-  ;(output layout-data-generator g/Any          produce-layout-data-generator) ; type: TextureSetResult
-  ;(output layout-data      g/Any               :cached (g/fnk [tpinfo] (.layout TextureSetResult)))
-  ;(output texture-set-data g/Any               :cached generate-texture-set-data)
-  ;(output layout-size      g/Any               (g/fnk [layout-data] (:size layout-data)))
-  ;(output texture-set      g/Any               (g/fnk [texture-set-data] (:texture-set texture-set-data)))
-  ;(output uv-transforms    g/Any               (g/fnk [layout-data] (:uv-transforms layout-data)))
-  ;(output layout-rects     g/Any               (g/fnk [layout-data] (:rects layout-data)))
-  ;
-  ;(output texture-page-count g/Int             (g/fnk [layout-data max-page-size]
-  ;                                                    (if (every? pos? max-page-size)
-  ;                                                      (count (.layouts ^TextureSetGenerator$LayoutResult (:layout layout-data)))
-  ;                                                      texture/non-paged-page-count)))
 
-  ;(output packed-page-images-generator g/Any   produce-packed-page-images-generator)
-  ;
-  ;(output packed-page-images [BufferedImage]   :cached (g/fnk [packed-page-images-generator] (call-generator packed-page-images-generator)))
-  ;
-  ;(output texture-set-pb   g/Any               :cached produce-atlas-texture-set-pb)
-  ;(output texture-pb   g/Any                   :cached produce-atlas-texture-pb)
+  (input gpu-texture g/Any)
+  (output gpu-texture g/Any (gu/passthrough gpu-texture))
 
   ;(output gpu-texture      g/Any               :cached (g/fnk [_node-id packed-page-images texture-profile]
   ;                                                            (let [page-texture-images
@@ -884,8 +853,7 @@
   ;                                                               {:min-filter gl/nearest
   ;                                                                :mag-filter gl/nearest}))))
   ;
-  ;(output anim-data        g/Any               :cached produce-anim-data)
-  ;(output image-path->rect g/Any               :cached produce-image-path->rect)
+
   (output anim-ids g/Any :cached (g/fnk [animation-ids tpinfo-frame-ids] (filter some? (concat animation-ids tpinfo-frame-ids))))
   (output id-counts NameCounts :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
