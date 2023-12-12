@@ -5,7 +5,9 @@
 package com.dynamo.bob.pipeline.tp;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -37,10 +39,8 @@ public class Atlas {
     public List<String>                     pageImageNames; // List of base filenames: basic-0.png, ...
 
     // TODO: Create helper struct for the editor to hold all the info
-    static public Atlas createAtlas(String path, byte[] data) throws IOException {
+    static public Atlas createAtlasInternal(String path, Info.Atlas atlasIn) throws IOException {
         System.out.printf("Creating atlas: %s\n", path);
-
-        Info.Atlas atlasIn = Info.Atlas.newBuilder().mergeFrom(data).build();
 
         Atlas atlas = new Atlas();
 
@@ -59,6 +59,13 @@ public class Atlas {
 
         return atlas;
     }
+
+    static public Atlas createAtlas(String path, byte[] data) throws IOException {
+        System.out.printf("Creating atlas: %s\n", path);
+        Info.Atlas atlasIn = Info.Atlas.newBuilder().mergeFrom(data).build();
+        return createAtlasInternal(path, atlasIn);
+    }
+
 
     // Used from editor
     static public TextureSet createTextureSet(String path, Atlas atlas, String texture) {
@@ -82,18 +89,42 @@ public class Atlas {
 
     // Used from editor
     // returns an array of floats (flattened (x,y)-tuples): [x0,y0,x1,y1,x2,...]
-    static public float[] getTriangles(TextureSetLayout.SourceImage image) {
+    static public float[] getTriangles(TextureSetLayout.SourceImage image, Float pageHeight) {
         float half_width = image.rect.width * 0.5f;
-        float half_height = image.rect.width * 0.5f;
+        float half_height = image.rect.height * 0.5f;
         float centerx = image.rect.x + half_width;
         float centery = image.rect.y + half_height;
+
+        //System.out.printf("image %s: %f, %f, %f, %f  %f\n", image.name, image.rect.x, image.rect.y, image.rect.width, image.rect.height, pageHeight);
 
         float[] out = new float[image.indices.size() * 2];
         int i = 0;
         for (int index : image.indices) {
+            // The vertices are in image local space. Upright, regardless of rotation
             TextureSetLayout.Point p = image.vertices.get(index);
-            out[i++] = centerx + p.x - half_width;
-            out[i++] = centery + p.y - half_height;
+
+            //System.out.printf("p: %f, %f\n", p.x, p.y);
+
+            // make it local around the center point
+            float x = p.x - half_width;
+            float y = p.y - half_height;
+            //System.out.printf("  local: %f, %f\n", x, y);
+
+            // flip y in the local space
+            y *= -1;
+            //System.out.printf("  flipped: %f, %f\n", x, y);
+
+            // offset it into the page
+            x = centerx + x;
+            y = centery + y;
+            //System.out.printf("  center: %f, %f\n", x, y);
+
+            // flip y in the page space
+            y = pageHeight - y;
+            //System.out.printf("  page: %f, %f\n", x, y);
+
+            out[i++] = x;
+            out[i++] = y;
         }
         return out;
     }
@@ -153,23 +184,56 @@ public class Atlas {
         String path = args[0];       // .tpjson
         File file = new File(path);
         if (!file.exists())
-            throw new IOException(String.format("FIle does not exist: %s", path));
+            throw new IOException(String.format("File does not exist: %s", path));
 
-        long timeStart = System.currentTimeMillis();
+        {
+            long timeStart = System.currentTimeMillis();
 
-        Info.Atlas atlas = Loader.load(file);
+            Info.Atlas atlas = Loader.load(file);
 
-        long timeEnd = System.currentTimeMillis();
+            long timeEnd = System.currentTimeMillis();
 
-        System.out.printf("Loaded %s %s\n", path, atlas!=null ? "ok":"failed");
-        System.out.printf("Loading took %d ms\n", (timeEnd - timeStart));
+            System.out.printf("Loaded %s %s\n", path, atlas!=null ? "ok":"failed");
+            System.out.printf("Loading took %d ms\n", (timeEnd - timeStart));
 
-        System.out.printf("--------------------------------\n");
+            System.out.printf("--------------------------------\n");
 
-        if (atlas != null) {
-            System.out.printf("%s\n", TextFormat.printToString(atlas));
+            if (atlas != null) {
+                System.out.printf("%s\n", TextFormat.printToString(atlas));
+            }
+
+            System.out.printf("--------------------------------\n");
         }
 
-        System.out.printf("--------------------------------\n");
+        {
+            Info.Atlas atlasIn = Loader.load(file);
+            Atlas atlas = Atlas.createAtlasInternal(path, atlasIn);
+
+            for (TextureSetLayout.Page page : atlas.pages) {
+                for (TextureSetLayout.SourceImage image : page.images) {
+                    //System.out.printf("IMAGE: %s\n", image.name);
+                    boolean found = image.name.equals("box_fill_64") || image.name.equals("triangle_fill_64");
+                    if (!found)
+                        continue;
+                    System.out.printf("\nFOUND: %s\n", image.name);
+
+                    float[] vertices = Atlas.getTriangles(image, page.size.height);
+
+                    for (int i = 0; i < vertices.length; ++i) {
+                        System.out.printf("%f ", vertices[i]);
+
+                        if ((i % 2) == 1) {
+                            System.out.printf("\n");
+                        }
+                    }
+
+                    System.out.printf("\n");
+                    TextureSetLayout.Rectangle rect = image.rect;
+
+                    System.out.printf("x/y/w/h: %f, %f  %f, %f\n",
+                            rect.x, rect.y, rect.width, rect.height);
+                }
+            }
+        }
     }
 }

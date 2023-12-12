@@ -74,12 +74,6 @@
 ; Plugin functions (from Atlas.java)
 
 (set! *warn-on-reflection* false)
-(defn- debug-cls [^Class cls]
-  (doseq [m (.getMethods cls)]
-    (prn (.toString m))
-    (println "Method Name: " (.getName m) "(" (.getParameterTypes m) ")")
-    (println "Return Type: " (.getReturnType m) "\n")))
-;; TODO: Support public variables as well
 
 (def tp-plugin-tpinfo-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Atlas"))
 (def tp-plugin-tpatlas-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Atlas$AtlasDesc"))
@@ -88,6 +82,13 @@
 (def byte-array-cls (Class/forName "[B"))
 (def string-cls (Class/forName "java.lang.String"))
 (def bufferedimage-array-cls (Class/forName "[Ljava.awt.image.BufferedImage;"))
+
+(defn- debug-cls [^Class cls]
+  (doseq [m (.getMethods cls)]
+    (prn (.toString m))
+    (println "Method Name: " (.getName m) "(" (.getParameterTypes m) ")")
+    (println "Return Type: " (.getReturnType m) "\n")))
+;; TODO: Support public variables as well
 
 (set! *warn-on-reflection* false)
 (defn- plugin-invoke-static [^Class cls name types args]
@@ -117,8 +118,8 @@
                         (into-array Class [String tp-plugin-cls bufferedimage-array-cls Graphics$TextureProfile])
                         [path atlas bufferedimages texture-profile]))
 
-(defn- plugin-source-image-get-vertices [image]
-  (plugin-invoke-static tp-plugin-cls "getTriangles" (into-array Class [TextureSetLayout$SourceImage]) [image]))
+(defn- plugin-source-image-get-vertices [image page-height]
+  (plugin-invoke-static tp-plugin-cls "getTriangles" (into-array Class [TextureSetLayout$SourceImage Float]) [image page-height]))
 
 
 (g/deftype ^:private NameCounts {s/Str s/Int})
@@ -351,7 +352,8 @@
     (.glColor4d gl cr cg cb ca)
     (.glBegin gl GL2/GL_TRIANGLES)
     (doall (map (fn [vert] (let [[x y] vert]
-                             (.glVertex3d gl (+ x offset-x) (- page-height (- image-height y)) 0))) vertices))
+                             ;(.glVertex3d gl (+ x offset-x) (- page-height (- image-height y)) 0))) vertices))
+                             (.glVertex3d gl (+ x offset-x) y 0))) vertices))
     (.glEnd gl)))
 
 (defn render-image-outline
@@ -363,9 +365,8 @@
           image (:image user-data)
           page-height (:layout-height user-data)
           image-height (.height (.rect image))
-          floats (plugin-source-image-get-vertices image)
+          floats (plugin-source-image-get-vertices image page-height)
           vertices (partition 2 floats)]
-      #_(render-rect gl (:rect user-data) color page-offset-x)
       (render-image-geometry gl vertices page-height image-height page-offset-x color)))
   (doseq [renderable renderables]
     (let [user-data (-> renderable :user-data)
@@ -373,12 +374,10 @@
           image (:image user-data)
           page-height (:layout-height user-data)
           image-height (.height (.rect image))
-          floats (plugin-source-image-get-vertices image)
+          floats (plugin-source-image-get-vertices image page-height)
           vertices (partition 2 floats)]
       (when (= (-> renderable :updatable :state :frame) (:order user-data))
-        #_(render-rect gl (:rect user-data) colors/defold-pink page-offset-x)
-        (render-image-geometry gl vertices page-height image-height page-offset-x colors/defold-pink)
-        ))))
+        (render-image-geometry gl vertices page-height image-height page-offset-x colors/defold-pink)))))
 
 (defn- render-image-outlines
   [^GL2 gl render-args renderables n]
@@ -394,8 +393,13 @@
         picking-id (:picking-id renderable)
         id-color (scene-picking/picking-id->color picking-id)
         user-data (-> renderable :user-data)
-        page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))]
-    (render-rect gl (:rect user-data) id-color page-offset-x)))
+        page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))
+        image (:image user-data)
+        page-height (:layout-height user-data)
+        image-height (.height (.rect image))
+        floats (plugin-source-image-get-vertices image page-height)
+        vertices (partition 2 floats)]
+    (render-image-geometry gl vertices page-height image-height page-offset-x id-color)))
 
 (defn- atlas-rect->editor-rect [rect]
   (types/->Rect (:path rect) (:x rect) (:y rect) (:width rect) (:height rect)))
@@ -428,8 +432,10 @@
                  :node-id _node-id
                  :renderable {:render-fn render-image-selection
                               :tags #{:atlas}
-                              :user-data {:rect rect
+                              :user-data {:image image
+                                          :rect rect
                                           :layout-width page-width
+                                          :layout-height page-height
                                           :page-index page-index}
                               :passes [pass/selection]}}]
      ;:updatable animation-updatable
@@ -707,12 +713,10 @@
 ;                      (child->order _node-id)))
 ;
 
-(defn render-animation
-  [^GL2 gl render-args renderables n]
+(defn render-animation [^GL2 gl render-args renderables n]
   (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx atlas-shader))
 
-(g/defnk produce-animation-updatable
-  [_node-id id anim-data]
+(g/defnk produce-animation-updatable [_node-id id anim-data]
   (texture-set/make-animation-updatable _node-id "Atlas Animation" (get anim-data id)))
 
 ; Structure that holds all information for an animation with multiple frames
@@ -882,8 +886,8 @@
                                             [:texture])])))
 
 ; TODO: We want to use the UV coordinates from the atlas
-;(g/defnk produce-anim-data [texture-set uv-transforms]
-;  (texture-set/make-anim-data texture-set uv-transforms))
+(g/defnk produce-anim-data [texture-set uv-transforms]
+  (texture-set/make-anim-data texture-set uv-transforms))
 
 (s/defrecord AtlasRect
   [path :- s/Any
@@ -969,6 +973,7 @@
   (input animations Animation :array)
   (output name-to-image-map g/Any :cached produce-name-to-image-map)
 
+  ;(output anim-data g/Any produce-anim-data)
   (input anim-ddf g/Any :array)                             ; Array of protobuf maps for each manually created animation
   (input animation-ids g/Str :array)                        ; List of the manually created animation ids
 
