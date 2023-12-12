@@ -111,19 +111,18 @@
 
 (g/deftype ^:private NameCounts {s/Str s/Int})
 
-(g/defnk produce-tpinfo-scene
-  [_node-id atlas]
-  (let [
-        ;[width height] layout-size
+(set! *warn-on-reflection* false)
+
+(g/defnk produce-tpinfo-scene [_node-id size atlas]
+  (let [[width height] size
+        num-pages (count (.pages atlas))
         ;pages (group-by :page layout-rects)
         ;child-renderables (into [] (for [[page-index page-rects] pages] (produce-page-renderables aabb width height page-index page-rects gpu-texture)))
         ]
-    {:info-text (format "Texture Packer Export File (.tpinfo)")
+    {:info-text (format "TexturePacker File (.tpinfo): %d pages %d x %d" num-pages (int width) (int height))
      ;:children (into child-renderables
      ;                child-scenes)
      }))
-
-(set! *warn-on-reflection* false)
 
 (g/defnk produce-tpatlas-scene [_node-id size atlas]
   (let [[width height] size
@@ -168,6 +167,13 @@
 
   (input images g/Any :array)
   (output images g/Any (gu/passthrough images))
+
+  (output aabb AABB (g/fnk [size pages]
+                      (if (= [0 0] size)
+                        geom/null-aabb
+                        (let [[w h] size
+                              width (* (count pages) w)]
+                          (types/->AABB (Point3d. 0 0 0) (Point3d. width h 0))))))
 
   (input child-scenes g/Any :array)
   (input child-outlines g/Any :array)
@@ -476,18 +482,9 @@
   (input child-scenes g/Any :array)
   (input child-build-errors g/Any :array)
   (input anim-data g/Any)
-  ;
-  ;(input layout-size g/Any)
-  ;(output layout-size g/Any (gu/passthrough layout-size))
 
   ;(input rename-patterns g/Str)
   ;(output rename-patterns g/Str (gu/passthrough rename-patterns))
-
-  ;(input image-resources g/Any :array)
-  ;(output image-resources g/Any (gu/passthrough image-resources))
-  ;
-  ;(input image-path->rect g/Any)
-  ;(output image-path->rect g/Any (gu/passthrough image-path->rect))
 
   (input gpu-texture g/Any)
 
@@ -897,6 +894,7 @@
                                             [:images :tpinfo-images]
                                             [:frame-ids :tpinfo-frame-ids]
                                             [:page-resources :tpinfo-page-resources]
+                                            [:aabb :aabb]
                                             )))
             (dynamic edit-type (g/constantly {:type resource/Resource :ext tpinfo-file-ext}))
             (dynamic error (g/fnk [_node-id file]
@@ -934,6 +932,9 @@
   (input child-build-errors g/Any :array)
   (input child-outlines g/Any :array)
 
+  (input aabb AABB)
+  (output aabb AABB (gu/passthrough aabb))
+
   (output texture-profile g/Any (g/fnk [texture-profiles resource]
                                   (tex-gen/match-texture-profile-pb texture-profiles (resource/proj-path resource))))
   ;
@@ -959,13 +960,6 @@
   ;
   ;(output texture-set-pb   g/Any               :cached produce-atlas-texture-set-pb)
   ;(output texture-pb   g/Any                   :cached produce-atlas-texture-pb)
-
-  ; TODO Move to TPInfoNode
-  (output aabb AABB (g/fnk [size]
-                      (if (= [0 0] size)
-                        geom/null-aabb
-                        (let [[w h] size]
-                          (types/->AABB (Point3d. 0 0 0) (Point3d. w h 0))))))
 
   ;(output gpu-texture      g/Any               :cached (g/fnk [_node-id packed-page-images texture-profile]
   ;                                                            (let [page-texture-images
@@ -1152,7 +1146,7 @@
         ;out (g/node-value current :frame-ids)
         ;out (g/node-value current :animations)
         ;out (g/node-value current :anim-ids)
-        out (g/node-value current :name-to-image-map)
+        out (g/node-value current :aabb)
         ]
     out))
 
