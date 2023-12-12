@@ -15,16 +15,20 @@ import java.awt.image.BufferedImage;
 import com.dynamo.bob.textureset.TextureSetGenerator;
 import com.dynamo.bob.textureset.TextureSetGenerator.TextureSetResult;
 import com.dynamo.bob.textureset.TextureSetLayout;
-import com.dynamo.graphics.proto.Graphics.TextureImage;
-import com.dynamo.graphics.proto.Graphics.TextureProfile;
 import com.dynamo.texturepacker.proto.Info;
 import com.google.protobuf.TextFormat;
 
 import com.dynamo.bob.pipeline.tp.AtlasBuilder.MappedAnimIterator;
 
+import com.dynamo.bob.util.TextureUtil;
+import com.dynamo.bob.pipeline.TextureGeneratorException;
+
+import com.dynamo.graphics.proto.Graphics.TextureImage;
+import com.dynamo.graphics.proto.Graphics.TextureProfile;
+import com.dynamo.gamesys.proto.TextureSetProto.TextureSet;
+
 public class Atlas {
 
-    public Info.Atlas                       atlas;      // Is this really needed?
     public List<String>                     frameIds;   // The unique frame names
     public List<TextureSetLayout.Page>      pages;
     public List<TextureSetLayout.Layout>    layouts;
@@ -56,16 +60,23 @@ public class Atlas {
         return atlas;
     }
 
-    static public TextureSetResult createTextureSet(Atlas atlas) {
+    static public TextureSet createTextureSet(String path, Atlas atlas, String texture) {
         MappedAnimIterator animIterator = new MappedAnimIterator(atlas.animations, atlas.frameIds);
-        return TextureSetGenerator.createTextureSet(atlas.layouts, animIterator);
+        TextureSetResult result = TextureSetGenerator.createTextureSet(atlas.layouts, animIterator);
+        int pageCount = atlas.pages.size();
+        return result.builder
+                    .setPageCount(pageCount)
+                    .setTexture(texture)
+                    .build();
     }
 
-    // static public TextureImage createTexture(Atlas atlas, List<BufferedImage> textureImages, boolean compress, TextureProfile textureProfile) {
-    //     // TODO: Use a setting in .tpatlas / array_texture
-    //     TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;
-    //     return TextureUtil.createMultiPageTexture(textureImages, textureImageType, textureProfile, compress);
-    // }
+    static public TextureImage createTexture(String path, Atlas atlas, List<BufferedImage> textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
+        // TODO: Use a setting in .tpatlas / array_texture
+        TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;
+        boolean compress = textureProfile != null;
+        //createMultiPageTexture(List<BufferedImage> images, TextureImage.Type textureType, TextureProfile texProfile, boolean compress)
+        return TextureUtil.createMultiPageTexture(textureImages, textureImageType, textureProfile, compress);
+    }
 
     private Info.Atlas createDebugAtlas() {
         Info.Atlas.Builder atlasBuilder = Info.Atlas.newBuilder();
