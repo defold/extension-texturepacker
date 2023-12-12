@@ -58,6 +58,7 @@
            [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
            [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
+           [com.dynamo.bob.textureset TextureSetLayout$SourceImage]
            [java.lang String]))
 
 (set! *warn-on-reflection* true)
@@ -72,11 +73,12 @@
 
 ; Plugin functions (from Atlas.java)
 
-;(defn- debug-cls [^Class cls]
-;  (doseq [m (.getMethods cls)]
-;    (prn (.toString m))
-;    (println "Method Name: " (.getName m) "(" (.getParameterTypes m) ")")
-;    (println "Return Type: " (.getReturnType m) "\n")))
+(set! *warn-on-reflection* false)
+(defn- debug-cls [^Class cls]
+  (doseq [m (.getMethods cls)]
+    (prn (.toString m))
+    (println "Method Name: " (.getName m) "(" (.getParameterTypes m) ")")
+    (println "Return Type: " (.getReturnType m) "\n")))
 ;; TODO: Support public variables as well
 
 (def tp-plugin-tpinfo-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Atlas"))
@@ -87,8 +89,13 @@
 (def string-cls (Class/forName "java.lang.String"))
 (def bufferedimage-array-cls (Class/forName "[Ljava.awt.image.BufferedImage;"))
 
+(set! *warn-on-reflection* false)
 (defn- plugin-invoke-static [^Class cls name types args]
-  (let [method (.getMethod cls name types)
+  (let [method (try
+                 (.getMethod cls name types)
+                 (catch NoSuchMethodException error
+                   (debug-cls cls)
+                   (throw error)))
         obj-args (into-array Object args)]
     (try
       (.invoke method nil obj-args)
@@ -97,6 +104,7 @@
         (prn "    with args of types:" (map type obj-args))
         (throw error)))
     ))
+(set! *warn-on-reflection* true)
 
 (defn- plugin-create-atlas [path tpinfo-as-bytes]
   (plugin-invoke-static tp-plugin-cls "createAtlas" (into-array Class [String byte-array-cls]) [path tpinfo-as-bytes]))
@@ -108,6 +116,9 @@
   (plugin-invoke-static tp-plugin-cls "createTexture"
                         (into-array Class [String tp-plugin-cls bufferedimage-array-cls Graphics$TextureProfile])
                         [path atlas bufferedimages texture-profile]))
+
+(defn- plugin-source-image-get-vertices [image]
+  (plugin-invoke-static tp-plugin-cls "getTriangles" (into-array Class [TextureSetLayout$SourceImage]) [image]))
 
 
 (g/deftype ^:private NameCounts {s/Str s/Int})
@@ -335,18 +346,39 @@
     (.glVertex3d gl x1 y0 0)
     (.glEnd gl)))
 
+(defn- render-image-geometry [^GL2 gl vertices page-height image-height offset-x color]
+  (let [[cr cg cb ca] color]
+    (.glColor4d gl cr cg cb ca)
+    (.glBegin gl GL2/GL_TRIANGLES)
+    (doall (map (fn [vert] (let [[x y] vert]
+                             (.glVertex3d gl (+ x offset-x) (- page-height (- image-height y)) 0))) vertices))
+    (.glEnd gl)))
+
 (defn render-image-outline
   [^GL2 gl render-args renderables]
   (doseq [renderable renderables]
     (let [user-data (-> renderable :user-data)
           page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))
-          color (colors/renderable-outline-color renderable)]
-      (render-rect gl (:rect user-data) color page-offset-x)))
+          color (colors/renderable-outline-color renderable)
+          image (:image user-data)
+          page-height (:layout-height user-data)
+          image-height (.height (.rect image))
+          floats (plugin-source-image-get-vertices image)
+          vertices (partition 2 floats)]
+      #_(render-rect gl (:rect user-data) color page-offset-x)
+      (render-image-geometry gl vertices page-height image-height page-offset-x color)))
   (doseq [renderable renderables]
     (let [user-data (-> renderable :user-data)
-          page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))]
+          page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))
+          image (:image user-data)
+          page-height (:layout-height user-data)
+          image-height (.height (.rect image))
+          floats (plugin-source-image-get-vertices image)
+          vertices (partition 2 floats)]
       (when (= (-> renderable :updatable :state :frame) (:order user-data))
-        (render-rect gl (:rect user-data) colors/defold-pink page-offset-x)))))
+        #_(render-rect gl (:rect user-data) colors/defold-pink page-offset-x)
+        (render-image-geometry gl vertices page-height image-height page-offset-x colors/defold-pink)
+        ))))
 
 (defn- render-image-outlines
   [^GL2 gl render-args renderables n]
@@ -385,9 +417,11 @@
      :renderable {:render-fn render-image-outlines
                   :tags #{:atlas :outline}
                   :batch-key ::atlas-image
-                  :user-data {:rect rect
+                  :user-data {:image image
+                              :rect rect
                               :order order
                               :layout-width page-width
+                              :layout-height page-height
                               :page-index page-index}
                   :passes [pass/outline]}
      :children [{:aabb aabb

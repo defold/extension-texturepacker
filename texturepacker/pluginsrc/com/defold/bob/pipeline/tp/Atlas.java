@@ -60,6 +60,7 @@ public class Atlas {
         return atlas;
     }
 
+    // Used from editor
     static public TextureSet createTextureSet(String path, Atlas atlas, String texture) {
         MappedAnimIterator animIterator = new MappedAnimIterator(atlas.animations, atlas.frameIds);
         TextureSetResult result = TextureSetGenerator.createTextureSet(atlas.layouts, animIterator);
@@ -70,12 +71,31 @@ public class Atlas {
                     .build();
     }
 
+    // Used from editor
     static public TextureImage createTexture(String path, Atlas atlas, BufferedImage[] textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
         // TODO: Use a setting in .tpatlas / array_texture
         TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;
         boolean compress = textureProfile != null;
         //createMultiPageTexture(List<BufferedImage> images, TextureImage.Type textureType, TextureProfile texProfile, boolean compress)
         return TextureUtil.createMultiPageTexture(Arrays.asList(textureImages), textureImageType, textureProfile, compress);
+    }
+
+    // Used from editor
+    // returns an array of floats (flattened (x,y)-tuples): [x0,y0,x1,y1,x2,...]
+    static public float[] getTriangles(TextureSetLayout.SourceImage image) {
+        float half_width = image.rect.width * 0.5f;
+        float half_height = image.rect.width * 0.5f;
+        float centerx = image.rect.x + half_width;
+        float centery = image.rect.y + half_height;
+
+        float[] out = new float[image.indices.size() * 2];
+        int i = 0;
+        for (int index : image.indices) {
+            TextureSetLayout.Point p = image.vertices.get(index);
+            out[i++] = centerx + p.x - half_width;
+            out[i++] = centery + p.y - half_height;
+        }
+        return out;
     }
 
     private Info.Atlas createDebugAtlas() {
