@@ -173,7 +173,6 @@ public class AtlasBuilder extends Builder<Void> {
 
     static private TextureSetLayout.Page createPage(int index, Info.Page srcPage) {
         TextureSetLayout.Page page = new TextureSetLayout.Page();
-        page.index = index;
         page.name = srcPage.getName();
         page.images = new ArrayList<>();
         page.size = AtlasBuilder.createSize(srcPage.getSize());

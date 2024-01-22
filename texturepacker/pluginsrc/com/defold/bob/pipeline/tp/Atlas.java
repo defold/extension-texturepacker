@@ -40,7 +40,7 @@ public class Atlas {
 
     // TODO: Create helper struct for the editor to hold all the info
     static public Atlas createAtlasInternal(String path, Info.Atlas atlasIn) throws IOException {
-        System.out.printf("Creating atlas: %s\n", path);
+        System.out.printf("Creating atlas (internal): %s\n", path);
 
         Atlas atlas = new Atlas();
 
