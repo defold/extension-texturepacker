@@ -39,6 +39,7 @@ import com.dynamo.gamesys.proto.Tile.SpriteTrimmingMode;
 // Texture packer extension
 import com.dynamo.texturepacker.proto.Info;                 // The Texture Packer input format
 import com.dynamo.texturepacker.proto.Atlas.AtlasDesc;      // The high level information
+import com.dynamo.texturepacker.proto.Atlas.AtlasAnimation; // A flipbook animation
 
 import com.google.protobuf.TextFormat; // Debug
 
@@ -82,17 +83,20 @@ public class AtlasBuilder extends Builder<Void> {
     // Borrowed from AtlasUtil.java in bob
     public static class MappedAnimDesc extends TextureSetGenerator.AnimDesc {
         List<String> ids; // Ids of each frame of animation
+        private boolean singleFrame;
 
         public MappedAnimDesc(String id, List<String> ids, Playback playback, int fps,
                                 boolean flipHorizontal, boolean flipVertical) {
             super(id, playback, fps, flipHorizontal, flipVertical);
             this.ids = ids;
+            this.singleFrame = false;
         }
 
         public MappedAnimDesc(String id) {
             super(id, Playback.PLAYBACK_NONE, 0, false, false);
             this.ids = new ArrayList<>();
             this.ids.add(id);
+            this.singleFrame = true;
         }
 
         public List<String> getIds() {
@@ -127,6 +131,15 @@ public class AtlasBuilder extends Builder<Void> {
                 return imageIds.indexOf(anim.getIds().get(nextFrameIndex++));
             }
             return null;
+        }
+
+        @Override
+        public String getFrameId() {
+            MappedAnimDesc anim = anims.get(nextAnimIndex - 1);
+            String prefix = "";
+            if (!anim.singleFrame)
+                prefix = anim.getId() + "/";
+            return prefix + anim.getIds().get(nextFrameIndex-1);
         }
 
         @Override
@@ -173,6 +186,7 @@ public class AtlasBuilder extends Builder<Void> {
 
     static private TextureSetLayout.Page createPage(int index, Info.Page srcPage) {
         TextureSetLayout.Page page = new TextureSetLayout.Page();
+        page.index = index;
         page.name = srcPage.getName();
         page.images = new ArrayList<>();
         page.size = AtlasBuilder.createSize(srcPage.getSize());
@@ -210,6 +224,24 @@ public class AtlasBuilder extends Builder<Void> {
         return anims;
     }
 
+    static public List<MappedAnimDesc> createFlipBookAnimations(AtlasDesc.Builder tpatlas) {
+        List<MappedAnimDesc> anims = new ArrayList<>();
+        for (AtlasAnimation animation : tpatlas.getAnimationsList()) {
+            anims.add(new MappedAnimDesc(animation.getId(), animation.getImagesList(),
+                                            animation.getPlayback(), animation.getFps(),
+                                            animation.getFlipHorizontal() != 0,
+                                            animation.getFlipVertical() != 0));
+        }
+        return anims;
+    }
+
+    static public List<MappedAnimDesc> createAnimations(AtlasDesc.Builder tpatlas, List<String> frameIds)
+    {
+        List<MappedAnimDesc> anims = createSingleFrameAnimations(frameIds);
+        anims.addAll(createFlipBookAnimations(tpatlas));
+        return anims;
+    }
+
     @Override
     public void build(Task<Void> task) throws CompileExceptionError, IOException {
 
@@ -221,7 +253,7 @@ public class AtlasBuilder extends Builder<Void> {
         List<TextureSetLayout.Page> pages = AtlasBuilder.createPages(infoAtlas);
 
         List<String> frameIds = AtlasBuilder.getFrameIds(infoAtlas); // The unique frames
-        List<MappedAnimDesc> animations = createSingleFrameAnimations(frameIds);
+        List<MappedAnimDesc> animations = createAnimations(builder, frameIds);
         MappedAnimIterator animIterator = new MappedAnimIterator(animations, frameIds);
 
         List<TextureSetLayout.Layout> layouts = TextureSetLayout.createTextureSet(pages);

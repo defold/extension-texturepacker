@@ -866,7 +866,7 @@
                  :atlas atlas}}))
 
 
-(g/defnk produce-tpatlas-build-targets [_node-id resource atlas tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings build-errors]
+(g/defnk produce-tpatlas-build-targets [_node-id resource atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings build-errors]
   (g/precluding-errors build-errors
     (let [project (project/get-project _node-id)
           workspace (project/workspace project)
@@ -876,7 +876,6 @@
                         nil)
 
           texture-resource (make-array-texture-build-target workspace _node-id atlas tpinfo-page-resources tpinfo-page-resources-sha1 tex-profile)
-          texture-set (plugin-create-texture-set (resource/path resource) atlas "")
 
           pb-msg (protobuf/pb->map texture-set)
           dep-build-targets [texture-resource]]
@@ -885,9 +884,10 @@
                                             (assoc pb-msg :texture (-> texture-resource :resource :resource))
                                             [:texture])])))
 
-; TODO: We want to use the UV coordinates from the atlas
-(g/defnk produce-anim-data [texture-set uv-transforms]
-  (texture-set/make-anim-data texture-set uv-transforms))
+;(g/defnk produce-anim-data [texture-set uv-transforms]
+;  (texture-set/make-anim-data texture-set uv-transforms))
+(g/defnk produce-anim-data [texture-set]
+  (prn "MAWE Needs to be implemented for sprites+gui nodes to render" texture-set))
 
 (s/defrecord AtlasRect
   [path :- s/Any
@@ -896,13 +896,6 @@
    width :- types/Int32
    height :- types/Int32
    page :- types/Int32])
-
-;(g/defnk produce-image-path->rect
-;  [layout-size layout-rects]
-;  (let [[w h] layout-size]
-;    (into {} (map (fn [{:keys [path x y width height page]}]
-;                    [path (->AtlasRect path x (- h height y) width height page)]))
-;          layout-rects)))
 
 (g/defnk produce-name-to-image-map [tpinfo-images]
   (let [node-ids tpinfo-images
@@ -973,7 +966,9 @@
   (input animations Animation :array)
   (output name-to-image-map g/Any :cached produce-name-to-image-map)
 
-  ;(output anim-data g/Any produce-anim-data)
+  (output texture-set g/Any :cached (g/fnk [resource atlas]
+                                      (plugin-create-texture-set (resource/path resource) atlas "")))
+  (output anim-data g/Any :cached produce-anim-data)
   (input anim-ddf g/Any :array)                             ; Array of protobuf maps for each manually created animation
   (input animation-ids g/Str :array)                        ; List of the manually created animation ids
 
@@ -1174,7 +1169,8 @@
         ;out (g/node-value current :frame-ids)
         ;out (g/node-value current :animations)
         ;out (g/node-value current :anim-ids)
-        out (g/node-value current :child-scenes)
+        ;out (g/node-value current :anim-data)
+        out (g/node-value current :texture-set)
         ]
     out))
 

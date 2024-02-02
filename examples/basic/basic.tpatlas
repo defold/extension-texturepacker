@@ -1,1 +1,10 @@
 file: "/examples/basic/basic.tpinfo"
+animations {
+  id: "BoxFlip"
+  images: "box_fill_128"
+  images: "box_fill_64"
+  playback: PLAYBACK_LOOP_FORWARD
+  fps: 4
+  flip_horizontal: 0
+  flip_vertical: 0
+}
