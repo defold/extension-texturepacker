@@ -172,16 +172,16 @@ public class Atlas {
         return atlasBuilder.build();
     }
 
-    // ./utils/test_plugin.sh <.tpatlas/.tpinfo path>
+    // ./utils/test_plugin.sh .tpinfo path
     public static void main(String[] args) throws IOException {
         System.setProperty("java.awt.headless", "true");
 
         if (args.length < 1) {
-            System.err.printf("Usage: ./utils/test_plugin.sh <.tpatlas/.tpinfo path>\n");
+            System.err.printf("Usage: ./utils/test_plugin.sh .tpinfo path\n");
             return;
         }
 
-        String path = args[0];       // .tpjson
+        String path = args[0];       // .tpinfo
         File file = new File(path);
         if (!file.exists())
             throw new IOException(String.format("File does not exist: %s", path));
