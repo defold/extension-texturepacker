@@ -1197,7 +1197,7 @@
       :icon tpatlas-icon
       :view-types [:scene :text]
       :view-opts {:scene {:grid true}}
-      :template "/texturepacker/resources/templates/template.tpatlas")
+      :template "/texturepacker/editor/resources/templates/template.tpatlas")
     ))
 
 ; The plugin
