@@ -7,11 +7,9 @@
 ;
 
 (ns editor.texturepacker
-  (:require [clojure.java.io :as io]
-            [editor.protobuf :as protobuf]
+  (:require [editor.protobuf :as protobuf]
             [dynamo.graph :as g]
             [editor.app-view :as app-view]
-            [editor.build-target :as bt]
             [editor.colors :as colors]
             [editor.core :as core]
             [editor.dialogs :as dialogs]
@@ -41,20 +39,16 @@
             [editor.pipeline.tex-gen :as tex-gen]
             [editor.resource-io :as resource-io]
             [editor.texture-set :as texture-set]
-            [util.murmur :as murmur]
             [schema.core :as s]
             [util.digestable :as digestable])
   (:import [editor.gl.shader ShaderLifecycle]
            [com.jogamp.opengl GL GL2]
            [java.awt.image BufferedImage]
-           [org.apache.commons.io IOUtils]
-           [java.io IOException]
            [java.lang IllegalArgumentException]
-           [java.nio FloatBuffer IntBuffer]
            [java.util List]
-           [javax.vecmath Matrix4d Point3d Vector3d Vector4d]
+           [javax.vecmath Matrix4d Point3d Vector3d]
            [editor.types Animation Image AABB]
-           [com.dynamo.gamesys.proto Tile$Playback Tile$SpriteTrimmingMode]
+           [com.dynamo.gamesys.proto Tile$Playback]
            [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
            [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
@@ -251,16 +245,12 @@
                      child-scenes)}))
 
 (g/defnk produce-tpatlas-scene [_node-id size atlas texture-profiles tpinfo-scene]
-  (let [[width height] size
-        num-pages (count (.pages atlas))
-        ;pages (group-by :page layout-rects)
-        ;child-renderables (into [] (for [[page-index page-rects] pages] (produce-page-renderables aabb width height page-index page-rects gpu-texture)))
-        ]
-    {:info-text (format "Atlas: %d pages %d x %d (%s profile)" num-pages (int width) (int height) (:name texture-profiles))
-     :children [tpinfo-scene]
-     ;:children (into child-renderables
-     ;                child-scenes)
-     }))
+  (let [[width height] size]
+    (if (nil? atlas)
+      {:info-text (format "Atlas: 0 pages 0 x 0")}
+      {:info-text (format "Atlas: %d pages %d x %d (%s profile)" (count (.pages atlas)) (int width) (int height) (:name texture-profiles))
+       :children [tpinfo-scene]}
+      )))
 
 (set! *warn-on-reflection* true)
 
