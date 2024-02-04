@@ -47,8 +47,18 @@ import com.google.protobuf.TextFormat; // Debug
 @BuilderParams(name="TexturePackerAtlas", inExts=".tpatlas", outExt = ".a.texturesetc")
 public class AtlasBuilder extends Builder<Void> {
 
+    static final String TEMPLATE_PATH = "texturepacker/editor/resources/templates/template.tpatlas";
+
     @Override
     public Task<Void> create(IResource input) throws IOException, CompileExceptionError {
+
+        // Since these template files currently get compiled by bob
+        if (input.getPath().equals(TEMPLATE_PATH))
+        {
+            Task.TaskBuilder<Void> taskBuilder = Task.<Void>newBuilder(this);
+            return taskBuilder.build();
+        }
+
         Task.TaskBuilder<Void> taskBuilder = Task.<Void>newBuilder(this)
                 .setName(params.name())
                 .addInput(input)
@@ -247,6 +257,9 @@ public class AtlasBuilder extends Builder<Void> {
 
         AtlasDesc.Builder builder = AtlasDesc.newBuilder();
         ProtoUtil.merge(task.input(0), builder);
+        if (task.input(0).getPath().equals(TEMPLATE_PATH)) {
+            return;
+        }
 
         Info.Atlas infoAtlas = Loader.load(task.input(1).getContent());
 
