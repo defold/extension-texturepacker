@@ -52,7 +52,7 @@
            [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
            [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
-           [com.dynamo.bob.textureset TextureSetLayout$SourceImage]
+           [com.dynamo.bob.textureset TextureSetLayout$SourceImage TextureSetGenerator$UVTransform]
            [java.lang String]))
 
 (set! *warn-on-reflection* true)
@@ -104,8 +104,9 @@
 (defn- plugin-create-atlas [path tpinfo-as-bytes]
   (plugin-invoke-static tp-plugin-cls "createAtlas" (into-array Class [String byte-array-cls]) [path tpinfo-as-bytes]))
 
-(defn- plugin-create-texture-set [path atlas texture-path]
-  (plugin-invoke-static tp-plugin-cls "createTextureSet" (into-array Class [String tp-plugin-cls String]) [path atlas texture-path]))
+;  Returns a Pair<TextureSet, List<extureSetGenerator.UVTransform>> (.left, .right)
+(defn- plugin-create-texture-set-result [path atlas texture-path]
+  (plugin-invoke-static tp-plugin-cls "createTextureSetResult" (into-array Class [String tp-plugin-cls String]) [path atlas texture-path]))
 
 (defn- plugin-create-texture ^Graphics$TextureImage [path atlas bufferedimages texture-profile]
   (plugin-invoke-static tp-plugin-cls "createTexture"
@@ -874,10 +875,10 @@
                                             (assoc pb-msg :texture (-> texture-resource :resource :resource))
                                             [:texture])])))
 
-;(g/defnk produce-anim-data [texture-set uv-transforms]
-;  (texture-set/make-anim-data texture-set uv-transforms))
-(g/defnk produce-anim-data [texture-set]
-  (prn "MAWE Needs to be implemented for sprites+gui nodes to render" texture-set))
+(g/defnk produce-anim-data [texture-set uv-transforms]
+  (let [texture-set-pb (protobuf/pb->map texture-set)
+        uv-transforms (into [] uv-transforms)]
+    (texture-set/make-anim-data texture-set-pb uv-transforms)))
 
 (s/defrecord AtlasRect
   [path :- s/Any
@@ -956,8 +957,12 @@
   (input animations Animation :array)
   (output name-to-image-map g/Any :cached produce-name-to-image-map)
 
-  (output texture-set g/Any :cached (g/fnk [resource atlas]
-                                      (plugin-create-texture-set (resource/path resource) atlas "")))
+  (output texture-set-result g/Any :cached (g/fnk [resource atlas]
+                                      (plugin-create-texture-set-result (resource/path resource) atlas "")))
+
+  (output uv-transforms g/Any :cached (g/fnk [texture-set-result] (.right texture-set-result)))
+  (output texture-set g/Any :cached (g/fnk [texture-set-result] (.left texture-set-result)))
+
   (output anim-data g/Any :cached produce-anim-data)
   (input anim-ddf g/Any :array)                             ; Array of protobuf maps for each manually created animation
   (input animation-ids g/Str :array)                        ; List of the manually created animation ids

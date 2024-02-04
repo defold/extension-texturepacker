@@ -66,16 +66,24 @@ public class Atlas {
         return createAtlasInternal(path, atlasIn);
     }
 
+    public static class Pair<L, R> {
+        public Pair(L left, R right) {
+            this.left = left;
+            this.right = right;
+        }
+        public L left;
+        public R right;
+    }
 
     // Used from editor
-    static public TextureSet createTextureSet(String path, Atlas atlas, String texture) {
+    static public Pair<TextureSet, List<TextureSetGenerator.UVTransform>> createTextureSetResult(String path, Atlas atlas, String texture) {
         MappedAnimIterator animIterator = new MappedAnimIterator(atlas.animations, atlas.frameIds);
         TextureSetResult result = TextureSetGenerator.createTextureSet(atlas.layouts, animIterator);
         int pageCount = atlas.pages.size();
-        return result.builder
-                    .setPageCount(pageCount)
-                    .setTexture(texture)
-                    .build();
+        return new Pair(result.builder.setPageCount(pageCount)
+                                      .setTexture(texture)
+                                      .build(),
+                        result.uvTransforms);
     }
 
     // Used from editor

@@ -63,8 +63,7 @@ public class AtlasBuilder extends Builder<Void> {
                 .setName(params.name())
                 .addInput(input)
                 .addOutput(input.changeExt(params.outExt()))
-                .addOutput(input.changeExt(".texturec"))
-                ;
+                .addOutput(input.changeExt(".texturec"));
 
         AtlasDesc.Builder builder = AtlasDesc.newBuilder();
         ProtoUtil.merge(input, builder);
@@ -245,8 +244,7 @@ public class AtlasBuilder extends Builder<Void> {
         return anims;
     }
 
-    static public List<MappedAnimDesc> createAnimations(AtlasDesc.Builder tpatlas, List<String> frameIds)
-    {
+    static public List<MappedAnimDesc> createAnimations(AtlasDesc.Builder tpatlas, List<String> frameIds){
         List<MappedAnimDesc> anims = createSingleFrameAnimations(frameIds);
         anims.addAll(createFlipBookAnimations(tpatlas));
         return anims;
