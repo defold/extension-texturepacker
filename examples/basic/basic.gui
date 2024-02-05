@@ -195,12 +195,8 @@ nodes {
   custom_type: 0
   enabled: true
   visible: true
-  material: "gui_paged_atlas"
+  material: ""
 }
 material: "/builtins/materials/gui.material"
 adjust_reference: ADJUST_REFERENCE_PARENT
 max_nodes: 512
-materials {
-  name: "gui_paged_atlas"
-  material: "/builtins/materials/gui_paged_atlas.material"
-}

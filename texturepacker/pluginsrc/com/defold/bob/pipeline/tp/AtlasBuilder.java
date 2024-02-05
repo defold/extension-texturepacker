@@ -270,8 +270,14 @@ public class AtlasBuilder extends Builder<Void> {
         List<TextureSetLayout.Layout> layouts = TextureSetLayout.createTextureSet(pages);
         TextureSetResult result = TextureSetGenerator.createTextureSet(layouts, animIterator);
 
-        // For now, let's always use an array. If the user want to opt for a TYPE_2D, we can add a setting for it
-        TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;// : TextureImage.Type.TYPE_2D;
+        // If we want better control over it, we can add a setting for it
+        TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;
+        if (layouts.size() == 1) {
+            if (!builder.getIsPagedAtlas()) {
+                textureImageType = TextureImage.Type.TYPE_2D;
+            }
+        }
+
         int pageCount = textureImageType == TextureImage.Type.TYPE_2D_ARRAY ? layouts.size() : 0;
 
         int buildDirLen         = project.getBuildDirectory().length();

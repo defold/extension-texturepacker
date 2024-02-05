@@ -1,4 +1,5 @@
 file: "/examples/anim_trim/anim_trim.tpinfo"
+rename_patterns: ""
 animations {
   id: "anim_trim"
   images: "sq1"
@@ -16,3 +17,4 @@ animations {
   flip_horizontal: 0
   flip_vertical: 0
 }
+is_paged_atlas: false

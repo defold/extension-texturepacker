@@ -111,10 +111,10 @@
 (defn- plugin-create-texture-set-result [path atlas texture-path]
   (plugin-invoke-static tp-plugin-cls "createTextureSetResult" (into-array Class [String tp-plugin-cls String]) [path atlas texture-path]))
 
-(defn- plugin-create-texture ^Graphics$TextureImage [path atlas bufferedimages texture-profile]
+(defn- plugin-create-texture ^Graphics$TextureImage [path is-paged atlas bufferedimages texture-profile]
   (plugin-invoke-static tp-plugin-cls "createTexture"
-                        (into-array Class [String tp-plugin-cls bufferedimage-array-cls Graphics$TextureProfile])
-                        [path atlas bufferedimages texture-profile]))
+                        (into-array Class [String Boolean tp-plugin-cls bufferedimage-array-cls Graphics$TextureProfile])
+                        [path is-paged atlas bufferedimages texture-profile]))
 
 (defn- plugin-source-image-get-vertices [image page-height]
   (plugin-invoke-static tp-plugin-cls "getTriangles" (into-array Class [TextureSetLayout$SourceImage Float]) [image page-height]))
@@ -434,6 +434,11 @@
                               :passes [pass/selection]}}]
      ;:updatable animation-updatable
      }))
+
+(defn- rename-id [id rename-patterns]
+    (if rename-patterns
+        (try (AtlasUtil/replaceStrings rename-patterns id) (catch Exception _ id))
+        id))
 
 ; See TextureSetLayer$SourceImage
 (g/defnode AtlasSourceImageNode
@@ -808,15 +813,17 @@
                   (g/set-property self
                     :file tpinfo-resource
                     :tpatlas tpatlas
-                    :rename-patterns (:rename-patterns tpatlas))
+                    :rename-patterns (:rename-patterns tpatlas)
+                    :is-paged-atlas (:is-paged-atlas tpatlas))
                   (map (fn [animation] (make-atlas-animation self animation)) animations))]
     tx-data))
 
 
 ; saving the .tpatlas file
-(g/defnk produce-tpatlas-save-value [file anim-ddf rename-patterns]
+(g/defnk produce-tpatlas-save-value [file anim-ddf rename-patterns is-paged-atlas]
   (cond-> {:file (resource/resource->proj-path file)
            :rename-patterns rename-patterns
+           :is-paged-atlas is-paged-atlas
            :animations anim-ddf
            }))
 
@@ -831,8 +838,20 @@
                     (validate-rename-patterns _node-id rename-patterns)
                     (validate-tpinfo-file _node-id file)))
 
+(defn- is-atlas-paged [tpinfo paged-atlas]
+  (if (nil? tpinfo)
+    false
+    (if (> (count (:pages tpinfo)) 1)
+      true
+      paged-atlas)))
+
+(defn- has-multi-pages [tpinfo]
+  (if (nil? tpinfo)
+    false
+    (> (count (:pages tpinfo)) 1)))
+
 (defn- build-array-texture [resource _dep-resources user-data]
-  (let [{:keys [node-id atlas page-resources texture-profile]} user-data]
+  (let [{:keys [node-id paged-atlas atlas page-resources texture-profile]} user-data]
     (g/precluding-errors
       []
       (let [path (resource/path resource)
@@ -841,15 +860,16 @@
                                   page-resources)
             buffered-images (into-array BufferedImage buffered-images)]
         {:resource resource
-         :content (protobuf/pb->bytes (plugin-create-texture path atlas buffered-images texture-profile))}))))
+         :content (protobuf/pb->bytes (plugin-create-texture path paged-atlas atlas buffered-images texture-profile))}))))
 
 (defn make-array-texture-build-target
-  [workspace node-id atlas tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile]
+  [workspace node-id paged-atlas atlas tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile]
   (let [texture-type (workspace/get-resource-type workspace "texture")
         texture-profile-pb (protobuf/pb->map texture-profile)
         texture-hash (digestable/sha1-hash
                        {:pages-sha1 tpinfo-page-resources-sha1
-                        :texture-profile texture-profile-pb})
+                        :texture-profile texture-profile-pb
+                        :paged-atlas paged-atlas})
         texture-resource (resource/make-memory-resource workspace texture-type texture-hash)]
     {:node-id node-id
      :resource (workspace/make-build-resource texture-resource)
@@ -858,10 +878,11 @@
      :user-data {:node-id node-id
                  :page-resources tpinfo-page-resources
                  :texture-profile texture-profile
+                 :paged-atlas paged-atlas
                  :atlas atlas}}))
 
 
-(g/defnk produce-tpatlas-build-targets [_node-id resource atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings build-errors]
+(g/defnk produce-tpatlas-build-targets [_node-id resource tpinfo is-paged-atlas atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings build-errors]
   (g/precluding-errors build-errors
     (let [project (project/get-project _node-id)
           workspace (project/workspace project)
@@ -870,7 +891,9 @@
                         texture-profile
                         nil)
 
-          texture-resource (make-array-texture-build-target workspace _node-id atlas tpinfo-page-resources tpinfo-page-resources-sha1 tex-profile)
+          use-paged-texture (or (has-multi-pages tpinfo) is-paged-atlas)
+
+          texture-resource (make-array-texture-build-target workspace _node-id use-paged-texture atlas tpinfo-page-resources tpinfo-page-resources-sha1 tex-profile)
 
           pb-msg (protobuf/pb->map texture-set)
           dep-build-targets [texture-resource]]
@@ -929,6 +952,14 @@
         tpinfo-bytes (protobuf/map->bytes tp-plugin-tpinfo-cls tpinfo)]
     (plugin-create-full-atlas path tpatlas-bytes tpinfo-bytes)))
 
+
+(set! *warn-on-reflection* false)
+
+(g/defnk get-uv-transforms [texture-set-result] (.right texture-set-result))
+(g/defnk get-texture-set [texture-set-result] (.left texture-set-result))
+
+(set! *warn-on-reflection* true)
+
 (g/defnode TPAtlasNode
   (inherits resource-node/ResourceNode)
 
@@ -972,6 +1003,10 @@
   (property rename-patterns g/Str
             (dynamic error (g/fnk [_node-id rename-patterns] (validate-rename-patterns _node-id rename-patterns))))
 
+  (property is-paged-atlas g/Bool
+            (dynamic visible (g/fnk [tpinfo] (not (has-multi-pages tpinfo))))
+            (dynamic read-only? (g/fnk [tpinfo] (has-multi-pages tpinfo))))
+
   (input build-settings g/Any)
   (input texture-profiles g/Any)
 
@@ -983,8 +1018,8 @@
   (output texture-set-result g/Any :cached (g/fnk [resource atlas]
                                       (plugin-create-texture-set-result (resource/path resource) atlas "")))
 
-  (output uv-transforms g/Any :cached (g/fnk [texture-set-result] (.right texture-set-result)))
-  (output texture-set g/Any :cached (g/fnk [texture-set-result] (.left texture-set-result)))
+  (output uv-transforms g/Any :cached get-uv-transforms)
+  (output texture-set g/Any :cached get-texture-set)
 
   (output anim-data g/Any :cached produce-anim-data)
   (input anim-ddf g/Any :array)                             ; Array of protobuf maps for each manually created animation
@@ -1002,17 +1037,6 @@
 
   (input gpu-texture g/Any)
   (output gpu-texture g/Any (gu/passthrough gpu-texture))
-
-  ;(output gpu-texture      g/Any               :cached (g/fnk [_node-id packed-page-images texture-profile]
-  ;                                                            (let [page-texture-images
-  ;                                                                  (mapv #(tex-gen/make-preview-texture-image % texture-profile)
-  ;                                                                        packed-page-images)]
-  ;                                                              (texture/texture-images->gpu-texture
-  ;                                                               _node-id
-  ;                                                               page-texture-images
-  ;                                                               {:min-filter gl/nearest
-  ;                                                                :mag-filter gl/nearest}))))
-  ;
 
   (output anim-ids g/Any :cached (g/fnk [animation-ids tpinfo-frame-ids] (filter some? (concat animation-ids tpinfo-frame-ids))))
   (output id-counts NameCounts :cached (g/fnk [anim-ids] (frequencies anim-ids)))
@@ -1181,7 +1205,7 @@
         ;out (g/node-value current :animations)
         ;out (g/node-value current :anim-ids)
         ;out (g/node-value current :anim-data)
-        out (g/node-value current :texture-set)
+        out (g/node-value current :paged-atlas)
         ]
     out))
 

@@ -27,4 +27,8 @@ message AtlasDesc
     optional string rename_patterns     = 2;
 
     repeated AtlasAnimation animations  = 3;
+
+    // If the atlas has only 1 page, then the user gets to decide
+    // what type of texture type to use: 2D, or 2D array
+    optional bool is_paged_atlas        = 4 [default = false];
 }
