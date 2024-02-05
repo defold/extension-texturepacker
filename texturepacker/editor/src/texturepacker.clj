@@ -52,7 +52,7 @@
            [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
            [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
-           [com.dynamo.bob.textureset TextureSetLayout$SourceImage TextureSetGenerator$UVTransform]
+           [com.dynamo.bob.textureset TextureSetLayout$SourceImage]
            [java.lang String]))
 
 (set! *warn-on-reflection* true)
@@ -814,9 +814,9 @@
 
 
 ; saving the .tpatlas file
-(g/defnk produce-tpatlas-save-value [file anim-ddf]
+(g/defnk produce-tpatlas-save-value [file anim-ddf rename-patterns]
   (cond-> {:file (resource/resource->proj-path file)
-           ;:rename_patterns ""
+           :rename-patterns rename-patterns
            :animations anim-ddf
            }))
 
@@ -878,6 +878,18 @@
                                             TextureSetProto$TextureSet
                                             (assoc pb-msg :texture (-> texture-resource :resource :resource))
                                             [:texture])])))
+
+; TODO: Jhonny - Output a new way for the "anim-data" to carry indices+vertices through to the rendering.
+; Currently, anim-data looks like this: (See texture-set/->anim-data
+;  { :width width)
+;    :height height)
+;    :playback playback
+;    :fps fps
+;    :frames frames
+;    :uv-transforms TextureSetGenerator$UVTransform}
+
+; The the "texture-set" is a full texture set that describes the atlas. It contains geometries for each image.
+; The uv-transforms was created from Atlas.java in this extension
 
 (g/defnk produce-anim-data [texture-set uv-transforms]
   (let [texture-set-pb (protobuf/pb->map texture-set)
@@ -1031,13 +1043,6 @@
   (output scene g/Any :cached produce-tpatlas-scene)
 
   (output own-build-errors g/Any produce-tpatlas-own-build-errors)
-  ;(output own-build-errors g/Any          (g/fnk [_node-id extrude-borders inner-padding margin max-page-size rename-patterns]
-  ;                                               (g/package-errors _node-id
-  ;                                                                 (validate-margin _node-id margin)
-  ;                                                                 (validate-inner-padding _node-id inner-padding)
-  ;                                                                 (validate-extrude-borders _node-id extrude-borders)
-  ;                                                                 (validate-max-page-size _node-id max-page-size)
-  ;                                                                 (validate-rename-patterns _node-id rename-patterns))))
   (output own-build-errors g/Any (g/fnk [_node-id] ()))
   (output build-errors g/Any (g/fnk [_node-id child-build-errors own-build-errors]
                                (g/package-errors _node-id
