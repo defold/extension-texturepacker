@@ -244,7 +244,7 @@ public class AtlasBuilder extends Builder<Void> {
         return anims;
     }
 
-    static public List<MappedAnimDesc> createAnimations(AtlasDesc.Builder tpatlas, List<String> frameIds){
+    static public List<MappedAnimDesc> createAnimations(AtlasDesc.Builder tpatlas, List<String> frameIds) {
         List<MappedAnimDesc> anims = createSingleFrameAnimations(frameIds);
         anims.addAll(createFlipBookAnimations(tpatlas));
         return anims;

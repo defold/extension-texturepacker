@@ -18,8 +18,10 @@ import com.dynamo.bob.textureset.TextureSetGenerator;
 import com.dynamo.bob.textureset.TextureSetGenerator.TextureSetResult;
 import com.dynamo.bob.textureset.TextureSetLayout;
 import com.dynamo.texturepacker.proto.Info;
+import com.dynamo.texturepacker.proto.Atlas.AtlasDesc;
 import com.google.protobuf.TextFormat;
-
+import com.dynamo.bob.pipeline.tp.Atlas.Pair;
+import com.dynamo.bob.pipeline.tp.AtlasBuilder.MappedAnimDesc;
 import com.dynamo.bob.pipeline.tp.AtlasBuilder.MappedAnimIterator;
 
 import com.dynamo.bob.util.TextureUtil;
@@ -39,18 +41,19 @@ public class Atlas {
     public List<String>                     pageImageNames; // List of base filenames: basic-0.png, ...
 
     // TODO: Create helper struct for the editor to hold all the info
-    static public Atlas createAtlasInternal(String path, Info.Atlas atlasIn) throws IOException {
-        System.out.printf("Creating atlas (internal): %s\n", path);
-
+    static public Atlas createAtlasInternal(String path, AtlasDesc.Builder tpatlasBuilder, Info.Atlas tpinfo) throws IOException {
         Atlas atlas = new Atlas();
 
-        atlas.frameIds = AtlasBuilder.getFrameIds(atlasIn);
-        atlas.animations = AtlasBuilder.createSingleFrameAnimations(atlas.frameIds);
-        atlas.pages = AtlasBuilder.createPages(atlasIn);
+        atlas.frameIds = AtlasBuilder.getFrameIds(tpinfo);
+        if (tpatlasBuilder != null)
+            atlas.animations = AtlasBuilder.createAnimations(tpatlasBuilder, atlas.frameIds);
+        else
+            atlas.animations = AtlasBuilder.createSingleFrameAnimations(atlas.frameIds);
+        atlas.pages = AtlasBuilder.createPages(tpinfo);
         atlas.layouts = TextureSetLayout.createTextureSet(atlas.pages);
 
         atlas.pageImageNames = new ArrayList<>();
-        for (Info.Page page : atlasIn.getPagesList()) {
+        for (Info.Page page : tpinfo.getPagesList()) {
             atlas.pageImageNames.add(page.getName());
         }
 
@@ -61,9 +64,14 @@ public class Atlas {
     }
 
     static public Atlas createAtlas(String path, byte[] data) throws IOException {
-        System.out.printf("Creating atlas: %s\n", path);
         Info.Atlas atlasIn = Info.Atlas.newBuilder().mergeFrom(data).build();
-        return createAtlasInternal(path, atlasIn);
+        return createAtlasInternal(path, null, atlasIn);
+    }
+
+    static public Atlas createFullAtlas(String path, byte[] data_tpatlas, byte[] data_tpinfo) throws IOException {
+        AtlasDesc.Builder tpatlasBuilder = AtlasDesc.newBuilder().mergeFrom(data_tpatlas);
+        Info.Atlas tpinfo = Info.Atlas.newBuilder().mergeFrom(data_tpinfo).build();
+        return createAtlasInternal(path, tpatlasBuilder, tpinfo);
     }
 
     public static class Pair<L, R> {
@@ -215,7 +223,7 @@ public class Atlas {
 
         {
             Info.Atlas atlasIn = Loader.load(file);
-            Atlas atlas = Atlas.createAtlasInternal(path, atlasIn);
+            Atlas atlas = Atlas.createAtlasInternal(path, null, atlasIn);
 
             for (TextureSetLayout.Page page : atlas.pages) {
                 for (TextureSetLayout.SourceImage image : page.images) {

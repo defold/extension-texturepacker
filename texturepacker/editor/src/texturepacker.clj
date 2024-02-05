@@ -104,6 +104,9 @@
 (defn- plugin-create-atlas [path tpinfo-as-bytes]
   (plugin-invoke-static tp-plugin-cls "createAtlas" (into-array Class [String byte-array-cls]) [path tpinfo-as-bytes]))
 
+(defn- plugin-create-full-atlas [path tpatlas-as-bytes tpinfo-as-bytes]
+  (plugin-invoke-static tp-plugin-cls "createFullAtlas" (into-array Class [String byte-array-cls byte-array-cls]) [path tpatlas-as-bytes tpinfo-as-bytes]))
+
 ;  Returns a Pair<TextureSet, List<extureSetGenerator.UVTransform>> (.left, .right)
 (defn- plugin-create-texture-set-result [path atlas texture-path]
   (plugin-invoke-static tp-plugin-cls "createTextureSetResult" (into-array Class [String tp-plugin-cls String]) [path atlas texture-path]))
@@ -804,6 +807,7 @@
                   (g/connect project :texture-profiles self :texture-profiles)
                   (g/set-property self
                     :file tpinfo-resource
+                    :tpatlas tpatlas
                     :rename-patterns (:rename-patterns tpatlas))
                   (map (fn [animation] (make-atlas-animation self animation)) animations))]
     tx-data))
@@ -907,6 +911,11 @@
                                 {:image-sha1s image-sha1s})]
         packed-image-sha1))))
 
+(g/defnk produce-full-atlas [resource tpatlas tpinfo]
+  (let [path (resource/path resource)
+        tpatlas-bytes (protobuf/map->bytes tp-plugin-tpatlas-cls tpatlas)
+        tpinfo-bytes (protobuf/map->bytes tp-plugin-tpinfo-cls tpinfo)]
+    (plugin-create-full-atlas path tpatlas-bytes tpinfo-bytes)))
 
 (g/defnode TPAtlasNode
   (inherits resource-node/ResourceNode)
@@ -918,7 +927,6 @@
                                             [:resource :tpinfo-file-resource]
                                             [:node-outline :tpinfo-node-outline]
                                             [:tpinfo :tpinfo]
-                                            [:atlas :atlas]
                                             [:size :tpinfo-size]
                                             [:images :tpinfo-images]
                                             [:frame-ids :tpinfo-frame-ids]
@@ -940,8 +948,9 @@
   (output tpinfo-frame-ids g/Any (gu/passthrough tpinfo-frame-ids))
 
   (input tpinfo g/Any)                                      ; map of Atlas.Info from tpinfo_ddf.proto
-  (input atlas g/Any)                                       ; type Atlas from Atlas.java
   (input tpinfo-size g/Any)
+
+  (property tpatlas g/Any (dynamic visible (g/constantly false)))
 
   (property size types/Vec2
             (value (g/fnk [tpinfo-size] tpinfo-size))
@@ -956,6 +965,8 @@
 
   (input animations Animation :array)
   (output name-to-image-map g/Any :cached produce-name-to-image-map)
+
+  (output atlas g/Any :cached produce-full-atlas)           ; type Atlas from Atlas.java
 
   (output texture-set-result g/Any :cached (g/fnk [resource atlas]
                                       (plugin-create-texture-set-result (resource/path resource) atlas "")))
