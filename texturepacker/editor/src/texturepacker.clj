@@ -250,7 +250,7 @@
 
 (g/defnk produce-tpatlas-scene [_node-id size atlas texture-profiles tpinfo-scene]
   (let [[width height] size]
-    (if (nil? atlas)
+    (if (nil? tpinfo-scene)
       {:info-text (format "Atlas: 0 pages 0 x 0")}
       {:info-text (format "Atlas: %d pages %d x %d (%s profile)" (count (.pages atlas)) (int width) (int height) (:name texture-profiles))
        :children [tpinfo-scene]}
