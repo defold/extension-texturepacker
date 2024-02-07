@@ -598,7 +598,8 @@
 
 (defn- validate-tpinfo-file [_node-id resource]
   ;; TODO: verify that the page images exist?
-  (prop-resource-error :fatal _node-id :scene resource ".tpinfo file"))
+  (or (validation/prop-error :fatal _node-id :material validation/prop-nil? resource "File")
+      (prop-resource-error :fatal _node-id :scene resource ".tpinfo file")))
 
 (defn- renderable->handle [renderable]
   (get-in renderable [:user-data :rive-file-handle]))
