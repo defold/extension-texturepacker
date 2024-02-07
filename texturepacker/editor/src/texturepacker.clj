@@ -947,14 +947,13 @@
                                 {:image-sha1s image-sha1s})]
         packed-image-sha1))))
 
-(g/defnk produce-full-atlas [resource tpatlas tpinfo]
+(set! *warn-on-reflection* false)
+
+(g/defnk produce-full-atlas [resource save-data tpatlas tpinfo]
   (let [path (resource/path resource)
-        tpatlas-bytes (protobuf/map->bytes tp-plugin-tpatlas-cls tpatlas)
+        tpatlas-bytes (protobuf/map->bytes tp-plugin-tpatlas-cls (protobuf/str->map tp-plugin-tpatlas-cls (:content save-data)))
         tpinfo-bytes (protobuf/map->bytes tp-plugin-tpinfo-cls tpinfo)]
     (plugin-create-full-atlas path tpatlas-bytes tpinfo-bytes)))
-
-
-(set! *warn-on-reflection* false)
 
 (g/defnk get-uv-transforms [texture-set-result] (.right texture-set-result))
 (g/defnk get-texture-set [texture-set-result] (.left texture-set-result))
