@@ -1,5 +1,5 @@
 file: "/examples/anim_trim/anim_trim.tpinfo"
-rename_patterns: ""
+rename_patterns: "sq=square"
 animations {
   id: "anim_trim"
   images: "sq1"

@@ -26,6 +26,8 @@ import com.dynamo.bob.pipeline.tp.AtlasBuilder.MappedAnimIterator;
 
 import com.dynamo.bob.util.TextureUtil;
 import com.dynamo.bob.pipeline.TextureGeneratorException;
+import com.dynamo.bob.pipeline.AtlasUtil;
+import com.dynamo.bob.CompileExceptionError;
 
 import com.dynamo.graphics.proto.Graphics.TextureImage;
 import com.dynamo.graphics.proto.Graphics.TextureProfile;
@@ -40,15 +42,36 @@ public class Atlas {
 
     public List<String>                     pageImageNames; // List of base filenames: basic-0.png, ...
 
+    static private List<String> renameFrameIds(List<String> frameIds, String renamePatterns) throws CompileExceptionError {
+        List<String> renamedIds = new ArrayList<>();
+        for (String s : frameIds) {
+            renamedIds.add(AtlasUtil.replaceStrings(renamePatterns, s));
+        }
+        return renamedIds;
+    }
+
     // TODO: Create helper struct for the editor to hold all the info
     static public Atlas createAtlasInternal(String path, AtlasDesc.Builder tpatlasBuilder, Info.Atlas tpinfo) throws IOException {
         Atlas atlas = new Atlas();
 
         atlas.frameIds = AtlasBuilder.getFrameIds(tpinfo);
-        if (tpatlasBuilder != null)
+
+        if (tpatlasBuilder != null) {
+            // The tpinfo is the original one, with no image renaming,
+            // so we do that right here, as we're building the final result
+            try {
+                atlas.frameIds = renameFrameIds(atlas.frameIds, tpatlasBuilder.getRenamePatterns());
+            } catch (CompileExceptionError e) {
+                throw new RuntimeException(String.format("Couldn't transform frame ids using rename patterns '%s'", tpatlasBuilder.getRenamePatterns()), e);
+            }
+
             atlas.animations = AtlasBuilder.createAnimations(tpatlasBuilder, atlas.frameIds);
-        else
+        }
+        else {
+            // tpatlasBuilder is null when we're building from a .tpinfo file only
             atlas.animations = AtlasBuilder.createSingleFrameAnimations(atlas.frameIds);
+        }
+
         atlas.pages = AtlasBuilder.createPages(tpinfo);
         atlas.layouts = TextureSetLayout.createTextureSet(atlas.pages);
 

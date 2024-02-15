@@ -1,6 +1,6 @@
 ;
 ; MIT License
-; Copyright (c) 2021 Defold
+; Copyright (c) 2024 Defold
 ; Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 ; The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 ; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
@@ -82,7 +82,7 @@
     (prn (.toString m))
     (println "Method Name: " (.getName m) "(" (.getParameterTypes m) ")")
     (println "Return Type: " (.getReturnType m) "\n")))
-;; TODO: Support public variables as well
+;; TODO: Support printing public variables as well
 
 (set! *warn-on-reflection* false)
 (defn- plugin-invoke-static [^Class cls name types args]
@@ -464,26 +464,8 @@
   (input frame-ids g/Any)
   (input rename-patterns g/Str)
 
-  ;(input child->order g/Any)
-  ;(output order g/Any (g/fnk [_node-id child->order]
-  ;                      (child->order _node-id)))
+  (output order g/Any :cached (g/fnk [frame-ids name] (.indexOf frame-ids name)))
 
-  (output order g/Any :cached (g/fnk [frame-ids] (.indexOf frame-ids name)))
-  ;(property trimmed g/Bool :cached
-  ;            (g/fnk [sprite] (.trimmed sprite))
-  ;            (dynamic read-only? (g/constantly true)))
-
-  ;name: "box_fill_128"
-  ;trimmed: false
-  ;rotated: false
-  ;is_solid: true
-  ;corner_offset {
-  ;  x: 0
-  ;  y: 0
-  ;}
-
-
-  ;(output transform Matrix4d :cached produce-transform)
   (output scene g/Any produce-image-scene)
 
   (output node-outline outline/OutlineData (g/fnk [_node-id name label]
@@ -609,6 +591,7 @@
 
 ;; *******************************************************************************************************************
 
+;; Attaches an AtlasAnimationImage node to an AtlasAnimation node
 (defn- attach-image-to-animation [animation-node image-node]
   (concat
     (g/connect image-node :_node-id animation-node :nodes)
@@ -622,29 +605,25 @@
     ;(g/connect animation-node :image-path->rect image-node :image-path->rect)
     ;(g/connect animation-node :layout-size image-node :layout-size)
     ;(g/connect animation-node :updatable image-node :animation-updatable)
-    #_(g/connect animation-node :rename-patterns image-node :rename-patterns)))
+    (g/connect animation-node :rename-patterns image-node :rename-patterns)))
 
+
+; Attaches an AtlasAnimation to a TPAtlasNode
 (defn- attach-animation-to-atlas [atlas-node animation-node]
   (concat
     (g/connect animation-node :_node-id atlas-node :nodes)
     (g/connect animation-node :animation atlas-node :animations)
-    ;(g/connect animation-node :atlas-images     atlas-node     :animation-images)
     (g/connect animation-node :build-errors atlas-node :child-build-errors)
     (g/connect animation-node :ddf-message atlas-node :anim-ddf)
     (g/connect animation-node :id atlas-node :animation-ids)
-    ;NOT NEEDED, right? (g/connect animation-node :image-resources  atlas-node     :image-resources)
     (g/connect animation-node :node-outline atlas-node :child-outlines)
     (g/connect animation-node :scene atlas-node :child-scenes)
-    ;(g/connect atlas-node     :gpu-texture      animation-node :gpu-texture)
     (g/connect atlas-node :id-counts animation-node :id-counts)
-    (g/connect atlas-node :tpinfo-frame-ids animation-node :frame-ids)
+    (g/connect atlas-node :frame-ids animation-node :frame-ids)
     (g/connect atlas-node :name-to-image-map animation-node :name-to-image-map)
 
-    ;(g/connect atlas-node     :name-to-image-map        animation-node :name-to-image-map)
-
-    ;(g/connect atlas-node     :layout-size      animation-node :layout-size)
     ;(g/connect atlas-node     :image-path->rect animation-node :image-path->rect)
-    #_(g/connect atlas-node :rename-patterns animation-node :rename-patterns)))
+    (g/connect atlas-node :rename-patterns animation-node :rename-patterns)))
 
 ;; *******************************************************************************************************************
 ;; AtlasAnimation
@@ -690,7 +669,14 @@
 ; Holds the name and produces the ddf-message
 (g/defnode AtlasAnimationImage
   (inherits outline/OutlineNode)
-  (property name g/Str (dynamic read-only? (g/constantly true)))
+
+  (property original-name g/Str
+            (dynamic visible (g/constantly false))
+            (dynamic read-only? (g/constantly true)))
+
+  (property name g/Str
+            (value (g/fnk [original-name rename-patterns] (rename-id original-name rename-patterns)))
+            (dynamic read-only? (g/constantly true)))
 
   (input rename-patterns g/Str)
 
@@ -706,12 +692,6 @@
                                               :label name
                                               :icon animation-icon
                                               :read-only true})))
-
-
-;(input child->order g/Any)
-;(output order g/Any (g/fnk [_node-id child->order]
-;                      (child->order _node-id)))
-;
 
 (defn render-animation [^GL2 gl render-args renderables n]
   (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx atlas-shader))
@@ -750,8 +730,8 @@
   (input child-build-errors g/Any :array)
   (input anim-data g/Any)
 
-  ;(input rename-patterns g/Str)
-  ;(output rename-patterns g/Str (gu/passthrough rename-patterns))
+  (input rename-patterns g/Str)
+  (output rename-patterns g/Str (gu/passthrough rename-patterns))
 
   (input gpu-texture g/Any)
 
@@ -782,13 +762,12 @@
                                                  child-build-errors
                                                  own-build-errors))))
 
-
 (defn- make-image-nodes [attach-fn parent image-names]
   (let [graph-id (g/node-id->graph-id parent)]
     (for [image-name image-names]
       (g/make-nodes
         graph-id
-        [atlas-image [AtlasAnimationImage {:name image-name}]]
+        [atlas-image [AtlasAnimationImage {:original-name image-name}]]
         (attach-fn parent atlas-image)))))
 
 (def ^:private make-image-nodes-in-animation (partial make-image-nodes attach-image-to-animation))
@@ -836,6 +815,7 @@
 
 (g/defnk produce-tpatlas-own-build-errors [_node-id file rename-patterns]
   (g/package-errors _node-id
+                    ; TODO: Make sure we verify the animation image names
                     (validate-rename-patterns _node-id rename-patterns)
                     (validate-tpinfo-file _node-id file)))
 
@@ -949,7 +929,7 @@
 
 (set! *warn-on-reflection* false)
 
-(g/defnk produce-full-atlas [resource save-data tpatlas tpinfo]
+(g/defnk produce-full-atlas [resource save-data tpinfo]
   (let [path (resource/path resource)
         tpatlas-bytes (protobuf/map->bytes tp-plugin-tpatlas-cls (protobuf/str->map tp-plugin-tpatlas-cls (:content save-data)))
         tpinfo-bytes (protobuf/map->bytes tp-plugin-tpinfo-cls tpinfo)]
@@ -959,6 +939,17 @@
 (g/defnk get-texture-set [texture-set-result] (.left texture-set-result))
 
 (set! *warn-on-reflection* true)
+
+(defn- modify-outline [rename-patterns outline]
+  (let [modified (assoc outline :label (rename-id (:node-outline-key outline) rename-patterns))]
+    modified))
+
+; We want to reuse the node outlines from the tpinfo file, but we also
+; need them to display any renamed image names
+(defn- make-tpinfo-node-outline-copies [rename-patterns tpinfo-node-outline]
+  (let [pages (:children tpinfo-node-outline)
+        images (into [] (first (map (fn [x] (:children x)) pages)))]
+    (map (partial modify-outline rename-patterns) images)))
 
 (g/defnode TPAtlasNode
   (inherits resource-node/ResourceNode)
@@ -1013,6 +1004,8 @@
   (input animations Animation :array)
   (output name-to-image-map g/Any :cached produce-name-to-image-map)
 
+  (output frame-ids g/Any :cached (g/fnk [tpinfo-frame-ids rename-patterns] (map (fn [id] (rename-id id rename-patterns)) tpinfo-frame-ids)))
+
   (output atlas g/Any :cached produce-full-atlas)           ; type Atlas from Atlas.java
 
   (output texture-set-result g/Any :cached (g/fnk [resource atlas]
@@ -1041,23 +1034,14 @@
   (output anim-ids g/Any :cached (g/fnk [animation-ids tpinfo-frame-ids] (filter some? (concat animation-ids tpinfo-frame-ids))))
   (output id-counts NameCounts :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
-  (output node-outline outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline child-outlines own-build-errors]
+  (output node-outline outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline rename-patterns child-outlines own-build-errors]
                                                      {:node-id _node-id
                                                       :node-outline-key "Atlas"
                                                       :label "Atlas"
                                                       :children (concat
-                                                                  (into []
-                                                                        (mapcat :children)
-                                                                        (:children tpinfo-node-outline))
+                                                                  (make-tpinfo-node-outline-copies rename-patterns tpinfo-node-outline)
                                                                   child-outlines)
-                                                      :icon tpatlas-icon
-                                                      ;:outline-error?   (g/error-fatal? own-build-errors)
-                                                      ;:child-reqs       [#_{:node-type    AtlasSourceImageNode
-                                                      ;                    :tx-attach-fn attach-image-to-atlas}
-                                                      ;                   ;{:node-type    AtlasAnimation
-                                                      ;                   ; :tx-attach-fn attach-animation-to-atlas}
-                                                      ;                   ]
-                                                      }))
+                                                      :icon tpatlas-icon}))
 
   (output tpinfo-page-resources-sha1 g/Any :cached produce-tpinfo-page-resources-sha1)
 
