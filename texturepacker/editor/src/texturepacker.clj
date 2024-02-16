@@ -1221,7 +1221,8 @@
 
 ; The plugin
 (defn load-plugin-texturepacker [workspace]
-  (g/transact (concat (register-resource-types workspace))))
+  (g/transact (concat (register-resource-types workspace)
+                      (workspace/add-atlas-resource-extensions workspace "tpatlas"))))
 
 (defn return-plugin []
   (fn [x] (load-plugin-texturepacker x)))
