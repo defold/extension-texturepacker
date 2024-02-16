@@ -595,15 +595,12 @@
 (defn- attach-image-to-animation [animation-node image-node]
   (concat
     (g/connect image-node :_node-id animation-node :nodes)
-    ;(g/connect image-node :atlas-image animation-node :atlas-images)
-    ;(g/connect image-node :build-errors animation-node :child-build-errors)
+    (g/connect image-node :build-errors animation-node :child-build-errors)
     (g/connect image-node :ddf-message animation-node :img-ddf)
-    ;(g/connect image-node :image-resource animation-node :image-resources)
     (g/connect image-node :node-outline animation-node :child-outlines)
     ;(g/connect image-node :scene animation-node :child-scenes)
     (g/connect animation-node :child->order image-node :child->order)
-    ;(g/connect animation-node :image-path->rect image-node :image-path->rect)
-    ;(g/connect animation-node :layout-size image-node :layout-size)
+    (g/connect animation-node :image-names image-node :image-names)
     ;(g/connect animation-node :updatable image-node :animation-updatable)
     (g/connect animation-node :rename-patterns image-node :rename-patterns)))
 
@@ -621,6 +618,7 @@
     (g/connect atlas-node :id-counts animation-node :id-counts)
     (g/connect atlas-node :frame-ids animation-node :frame-ids)
     (g/connect atlas-node :name-to-image-map animation-node :name-to-image-map)
+    (g/connect atlas-node :image-names animation-node :image-names)
 
     ;(g/connect atlas-node     :image-path->rect animation-node :image-path->rect)
     (g/connect atlas-node :rename-patterns animation-node :rename-patterns)))
@@ -666,6 +664,13 @@
    :playback playback
    :images (sort-by-order-and-get-image img-ddf)})
 
+(defn prop-id-missing-in? [id ids]
+  (when-not (contains? (set ids) id)
+    (format "'%s' could not be found in .tpinfo file" id)))
+
+(defn- validate-name [node-id name names]
+  (validation/prop-error :fatal node-id :name prop-id-missing-in? name names))
+
 ; Holds the name and produces the ddf-message
 (g/defnode AtlasAnimationImage
   (inherits outline/OutlineNode)
@@ -676,9 +681,12 @@
 
   (property name g/Str
             (value (g/fnk [original-name rename-patterns] (rename-id original-name rename-patterns)))
+            (dynamic error (g/fnk [_node-id name image-names] (validate-name _node-id name image-names)))
             (dynamic read-only? (g/constantly true)))
 
   (input rename-patterns g/Str)
+
+  (input image-names g/Any)
 
   (input child->order g/Any)
   (output order g/Any (g/fnk [_node-id child->order]
@@ -686,12 +694,17 @@
 
   (output ddf-message g/Any (g/fnk [name order]
                               {:image name :order order}))
-  (output node-outline outline/OutlineData (g/fnk [_node-id name]
+
+  (output node-outline outline/OutlineData (g/fnk [_node-id name build-errors]
                                              {:node-id _node-id
                                               :node-outline-key name
                                               :label name
                                               :icon animation-icon
-                                              :read-only true})))
+                                              :outline-error? (g/error-fatal? build-errors)
+                                              :read-only true}))
+
+  (output build-errors g/Any (g/fnk [_node-id name image-names]
+                               (g/package-errors _node-id (validate-name _node-id name image-names)))))
 
 (defn render-animation [^GL2 gl render-args renderables n]
   (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx atlas-shader))
@@ -725,6 +738,8 @@
   ; A map from source image name to the node id of the AtlasSourceImageNode
   (input name-to-image-map g/Any)
 
+  (input image-names g/Any)
+  (output image-names g/Any (gu/passthrough image-names))
 
   (input child-scenes g/Any :array)
   (input child-build-errors g/Any :array)
@@ -914,6 +929,11 @@
         name-image-map (zipmap names node-ids)]
     name-image-map))
 
+(g/defnk produce-image-names [tpinfo-images rename-patterns]
+  (let [node-ids tpinfo-images
+        names (map (fn [id] (rename-id (g/node-value id :name) rename-patterns)) node-ids)]
+    names))
+
 (g/defnk produce-tpinfo-page-resources-sha1 [_node-id tpinfo-page-resources]
   (let [flat-image-resources (filterv some? (flatten tpinfo-page-resources))
         image-sha1s (map (fn [resource]
@@ -1003,13 +1023,14 @@
 
   (input animations Animation :array)
   (output name-to-image-map g/Any :cached produce-name-to-image-map)
+  (output image-names g/Any :cached produce-image-names) ; These are a list of renamed source image names
 
   (output frame-ids g/Any :cached (g/fnk [tpinfo-frame-ids rename-patterns] (map (fn [id] (rename-id id rename-patterns)) tpinfo-frame-ids)))
 
   (output atlas g/Any :cached produce-full-atlas)           ; type Atlas from Atlas.java
 
   (output texture-set-result g/Any :cached (g/fnk [resource atlas]
-                                      (plugin-create-texture-set-result (resource/path resource) atlas "")))
+                                             (plugin-create-texture-set-result (resource/path resource) atlas "")))
 
   (output uv-transforms g/Any :cached get-uv-transforms)
   (output texture-set g/Any :cached get-texture-set)
@@ -1038,6 +1059,7 @@
                                                      {:node-id _node-id
                                                       :node-outline-key "Atlas"
                                                       :label "Atlas"
+                                                      :outline-error? (g/error-fatal? own-build-errors)
                                                       :children (concat
                                                                   (make-tpinfo-node-outline-copies rename-patterns tpinfo-node-outline)
                                                                   child-outlines)
@@ -1051,7 +1073,6 @@
   (output scene g/Any :cached produce-tpatlas-scene)
 
   (output own-build-errors g/Any produce-tpatlas-own-build-errors)
-  (output own-build-errors g/Any (g/fnk [_node-id] ()))
   (output build-errors g/Any (g/fnk [_node-id child-build-errors own-build-errors]
                                (g/package-errors _node-id
                                                  child-build-errors
