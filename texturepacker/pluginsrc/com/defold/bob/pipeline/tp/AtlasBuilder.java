@@ -264,6 +264,17 @@ public class AtlasBuilder extends Builder<Void> {
         List<TextureSetLayout.Page> pages = AtlasBuilder.createPages(infoAtlas);
 
         List<String> frameIds = AtlasBuilder.getFrameIds(infoAtlas); // The unique frames
+
+        // verify that the animations doesn't refer to an old image
+        for (AtlasAnimation animation : builder.getAnimationsList()) {
+            for (String image : animation.getImagesList()) {
+                if (!frameIds.contains(image)) {
+                    throw new CompileExceptionError(task.input(0), -1,
+                            String.format("Animation '%s' contains image '%s' that does not exist in file '%s'", animation.getId(), image, task.input(1).getPath()));
+                }
+            }
+        }
+
         List<MappedAnimDesc> animations = createAnimations(builder, frameIds);
         MappedAnimIterator animIterator = new MappedAnimIterator(animations, frameIds);
 
