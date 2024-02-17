@@ -137,7 +137,12 @@ public class AtlasBuilder extends Builder<Void> {
         public Integer nextFrameIndex() {
             MappedAnimDesc anim = anims.get(nextAnimIndex - 1);
             if (nextFrameIndex < anim.getIds().size()) {
-                return imageIds.indexOf(anim.getIds().get(nextFrameIndex++));
+                int index = imageIds.indexOf(anim.getIds().get(nextFrameIndex++));
+                // We only really get here from the Editor,
+                // and I've not figured out why this code is called before checking the build errors
+                if (index < 0) {
+                    return 0;
+                }
             }
             return null;
         }
