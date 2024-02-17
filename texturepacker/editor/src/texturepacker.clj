@@ -692,8 +692,8 @@
   (output order g/Any (g/fnk [_node-id child->order]
                         (child->order _node-id)))
 
-  (output ddf-message g/Any (g/fnk [name order]
-                              {:image name :order order}))
+  (output ddf-message g/Any (g/fnk [original-name order]
+                              {:image original-name :order order}))
 
   (output node-outline outline/OutlineData (g/fnk [_node-id name build-errors]
                                              {:node-id _node-id
@@ -878,7 +878,7 @@
                  :atlas atlas}}))
 
 
-(g/defnk produce-tpatlas-build-targets [_node-id resource tpinfo is-paged-atlas atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings build-errors]
+(g/defnk produce-tpatlas-build-targets [_node-id resource build-errors tpinfo is-paged-atlas atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings]
   (g/precluding-errors build-errors
     (let [project (project/get-project _node-id)
           workspace (project/workspace project)
@@ -897,18 +897,6 @@
                                             TextureSetProto$TextureSet
                                             (assoc pb-msg :texture (-> texture-resource :resource :resource))
                                             [:texture])])))
-
-; TODO: Jhonny - Output a new way for the "anim-data" to carry indices+vertices through to the rendering.
-; Currently, anim-data looks like this: (See texture-set/->anim-data
-;  { :width width)
-;    :height height)
-;    :playback playback
-;    :fps fps
-;    :frames frames
-;    :uv-transforms TextureSetGenerator$UVTransform}
-
-; The the "texture-set" is a full texture set that describes the atlas. It contains geometries for each image.
-; The uv-transforms was created from Atlas.java in this extension
 
 (g/defnk produce-anim-data [texture-set uv-transforms]
   (let [texture-set-pb (protobuf/pb->map texture-set)

@@ -122,6 +122,11 @@ public class AtlasBuilder extends Builder<Void> {
         public MappedAnimIterator(List<MappedAnimDesc> anims, List<String> imageIds) {
             this.anims = anims;
             this.imageIds = imageIds;
+
+            // System.out.printf("Image ids\n");
+            // for (String s : imageIds) {
+            //     System.out.printf("  image id: %s\n", s);
+            // }
         }
 
         @Override
@@ -140,9 +145,7 @@ public class AtlasBuilder extends Builder<Void> {
                 int index = imageIds.indexOf(anim.getIds().get(nextFrameIndex++));
                 // We only really get here from the Editor,
                 // and I've not figured out why this code is called before checking the build errors
-                if (index < 0) {
-                    return 0;
-                }
+                return index < 0 ? null : index;
             }
             return null;
         }
@@ -255,6 +258,25 @@ public class AtlasBuilder extends Builder<Void> {
         return anims;
     }
 
+    static public void renameAnimations(AtlasDesc.Builder builder, String renamePatterns) throws CompileExceptionError {
+        List<AtlasAnimation> newAnimations = new ArrayList<>();
+        for (AtlasAnimation animation : builder.getAnimationsList()) {
+            AtlasAnimation.Builder animationBuilder = AtlasAnimation.newBuilder().mergeFrom(animation);
+            List<String> originalImages = animationBuilder.getImagesList();
+            List<String> newImages = Atlas.renameFrameIds(originalImages, renamePatterns);
+
+            for (String s : newImages) {
+                System.out.printf("Renamed animation image: %s\n", s);
+            }
+
+            animationBuilder.clearImages();
+            animationBuilder.addAllImages(newImages);
+            newAnimations.add(animationBuilder.build());
+        }
+        builder.clearAnimations();
+        builder.addAllAnimations(newAnimations);
+    }
+
     @Override
     public void build(Task<Void> task) throws CompileExceptionError, IOException {
 
@@ -270,6 +292,12 @@ public class AtlasBuilder extends Builder<Void> {
 
         List<String> frameIds = AtlasBuilder.getFrameIds(infoAtlas); // The unique frames
 
+        // Now rename the images
+        String renamePatterns = builder.getRenamePatterns();
+        frameIds = Atlas.renameFrameIds(frameIds, renamePatterns);
+
+        renameAnimations(builder, renamePatterns);
+
         // verify that the animations doesn't refer to an old image
         for (AtlasAnimation animation : builder.getAnimationsList()) {
             for (String image : animation.getImagesList()) {
@@ -279,6 +307,11 @@ public class AtlasBuilder extends Builder<Void> {
                 }
             }
         }
+
+        // System.out.printf("FRAME IDS\n");
+        // for (String frameId : frameIds) {
+        //     System.out.printf("  FRAME ID: %s\n", frameId);
+        // }
 
         List<MappedAnimDesc> animations = createAnimations(builder, frameIds);
         MappedAnimIterator animIterator = new MappedAnimIterator(animations, frameIds);

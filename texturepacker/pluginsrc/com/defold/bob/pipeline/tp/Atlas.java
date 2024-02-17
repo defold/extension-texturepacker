@@ -42,7 +42,7 @@ public class Atlas {
 
     public List<String>                     pageImageNames; // List of base filenames: basic-0.png, ...
 
-    static private List<String> renameFrameIds(List<String> frameIds, String renamePatterns) throws CompileExceptionError {
+    static public List<String> renameFrameIds(List<String> frameIds, String renamePatterns) throws CompileExceptionError {
         List<String> renamedIds = new ArrayList<>();
         for (String s : frameIds) {
             renamedIds.add(AtlasUtil.replaceStrings(renamePatterns, s));
@@ -57,12 +57,20 @@ public class Atlas {
         atlas.frameIds = AtlasBuilder.getFrameIds(tpinfo);
 
         if (tpatlasBuilder != null) {
+            String renamePatterns = tpatlasBuilder.getRenamePatterns();
+
             // The tpinfo is the original one, with no image renaming,
             // so we do that right here, as we're building the final result
             try {
-                atlas.frameIds = renameFrameIds(atlas.frameIds, tpatlasBuilder.getRenamePatterns());
+                atlas.frameIds = renameFrameIds(atlas.frameIds, renamePatterns);
             } catch (CompileExceptionError e) {
-                throw new RuntimeException(String.format("Couldn't transform frame ids using rename patterns '%s'", tpatlasBuilder.getRenamePatterns()), e);
+                throw new RuntimeException(String.format("Couldn't transform frame ids using rename patterns '%s'", renamePatterns), e);
+            }
+
+            try {
+                AtlasBuilder.renameAnimations(tpatlasBuilder, renamePatterns);
+            } catch (CompileExceptionError e) {
+                throw new RuntimeException(String.format("Couldn't transform animation frame ids using rename patterns '%s'", renamePatterns), e);
             }
 
             atlas.animations = AtlasBuilder.createAnimations(tpatlasBuilder, atlas.frameIds);
@@ -71,6 +79,11 @@ public class Atlas {
             // tpatlasBuilder is null when we're building from a .tpinfo file only
             atlas.animations = AtlasBuilder.createSingleFrameAnimations(atlas.frameIds);
         }
+
+        // System.out.printf("MAWE atlas: %s\n", path);
+        // for (String s : atlas.frameIds) {
+        //     System.out.printf("MAWE frameids: %s\n", s);
+        // }
 
         atlas.pages = AtlasBuilder.createPages(tpinfo);
         atlas.layouts = TextureSetLayout.createTextureSet(atlas.pages);
