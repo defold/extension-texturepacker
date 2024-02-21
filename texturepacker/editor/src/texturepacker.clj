@@ -362,8 +362,7 @@
           page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))
           color (colors/renderable-outline-color renderable)
           image (:image user-data)
-          vertices (:vertices image)
-          ]
+          vertices (:vertices image)]
       (render-image-geometry gl vertices page-offset-x color)))
   (doseq [renderable renderables]
     (let [user-data (-> renderable :user-data)
@@ -399,7 +398,7 @@
 (defn- to-rect [name page-height rect]
   {:path name :x (:x rect) :y (- page-height (:y rect) (:height rect)) :width (:width rect) :height (:height rect)})
 
-(g/defnk produce-image-scene [_node-id name image order page]
+(g/defnk produce-image-scene [_node-id name image image-order page]
   (let [size (.size page)
         page-width (.width size)
         page-height (.height size)
@@ -414,7 +413,7 @@
                   :batch-key ::atlas-image
                   :user-data {:image image
                               :rect rect
-                              :order order
+                              :order image-order
                               :layout-width page-width
                               :layout-height page-height
                               :page-index page-index}
@@ -451,26 +450,35 @@
             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
             (dynamic read-only? (g/constantly true)))
 
-  (property rotated g/Bool
-            (value (g/fnk [image] (:rotated image)))
-            (dynamic read-only? (g/constantly true)))
-
-  (output label g/Any :cached (g/fnk [name] (format "%s" name)))
-
   (input page g/Any)
-  (input frame-ids g/Any)
   (input rename-patterns g/Str)
 
-  (output order g/Any :cached (g/fnk [frame-ids name] (.indexOf frame-ids name)))
+  (input image-names g/Any) ; a list of original image names (i.e. not renamed)
+
+  (input animation g/Any) ; nil if this is a source image from the tpinfo file
+
+  (input child->order g/Any)
+
+  ; The order of this image within the list of images in the actual .tpinfo file
+  (output image-order g/Any (g/fnk [original-name image-names] (.indexOf image-names original-name)))
+
+  (output order g/Any (g/fnk [_node-id child->order] (child->order _node-id))) ; it is a child of an AnimationNode
+
+  (output ddf-message g/Any (g/fnk [original-name order]
+                              {:image original-name :order order}))
 
   (output scene g/Any produce-image-scene)
 
-  (output node-outline outline/OutlineData (g/fnk [_node-id name label]
+  (output node-outline outline/OutlineData (g/fnk [_node-id name build-errors]
                                              {:node-id _node-id
                                               :node-outline-key name
-                                              :label label
+                                              :label name
                                               :icon animation-icon
-                                              :read-only true})))
+                                              :outline-error? (g/error-fatal? build-errors)
+                                              :read-only true}))
+
+  (output build-errors g/Any (g/fnk [_node-id name image-names]
+                               (g/package-errors _node-id (validate-name _node-id name image-names)))))
 
 ; See TextureSetLayer$Page
 (g/defnode AtlasPageNode
@@ -533,13 +541,13 @@
         page-height (.width (.size page))
         parent-graph-id (g/node-id->graph-id page-id)
         image-map (convert-source-image-to-map image page-height)
-        image-tx-data (g/make-nodes parent-graph-id [image-id [AtlasSourceImageNode :name name :image image-map]]
+        image-tx-data (g/make-nodes parent-graph-id [image-id [AtlasAnimationImage :original-name name :image image-map]]
                         (g/connect image-id :_node-id page-id :nodes)
                         (g/connect image-id :node-outline page-id :child-outlines)
                         (g/connect image-id :_node-id tpinfo-id :images)
                         (g/connect image-id :scene tpinfo-id :child-scenes)
                         (g/connect page-id :page image-id :page)
-                        (g/connect tpinfo-id :frame-ids image-id :frame-ids))]
+                        (g/connect tpinfo-id :frame-ids image-id :image-names))]
     image-tx-data))
 
 (defn- create-image-nodes [tpinfo-id parent-id page]
@@ -691,48 +699,6 @@
    :flip-vertical flip-vertical
    :playback playback
    :images (sort-by-order-and-get-image img-ddf)})
-
-(defn prop-id-missing-in? [id ids]
-  (when-not (contains? (set ids) id)
-    (format "'%s' could not be found in .tpinfo file" id)))
-
-(defn- validate-name [node-id name names]
-  (validation/prop-error :fatal node-id :name prop-id-missing-in? name names))
-
-; Holds the name and produces the ddf-message
-(g/defnode AtlasAnimationImage
-  (inherits outline/OutlineNode)
-
-  (property original-name g/Str
-            (dynamic visible (g/constantly false))
-            (dynamic read-only? (g/constantly true)))
-
-  (property name g/Str
-            (value (g/fnk [original-name rename-patterns] (rename-id original-name rename-patterns)))
-            (dynamic error (g/fnk [_node-id name image-names] (validate-name _node-id name image-names)))
-            (dynamic read-only? (g/constantly true)))
-
-  (input rename-patterns g/Str)
-
-  (input image-names g/Any)
-
-  (input child->order g/Any)
-  (output order g/Any (g/fnk [_node-id child->order]
-                        (child->order _node-id)))
-
-  (output ddf-message g/Any (g/fnk [original-name order]
-                              {:image original-name :order order}))
-
-  (output node-outline outline/OutlineData (g/fnk [_node-id name build-errors]
-                                             {:node-id _node-id
-                                              :node-outline-key name
-                                              :label name
-                                              :icon animation-icon
-                                              :outline-error? (g/error-fatal? build-errors)
-                                              :read-only true}))
-
-  (output build-errors g/Any (g/fnk [_node-id name image-names]
-                               (g/package-errors _node-id (validate-name _node-id name image-names)))))
 
 (defn render-animation [^GL2 gl render-args renderables n]
   (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx atlas-shader))
@@ -980,12 +946,23 @@
   (let [modified (assoc outline :label (rename-id (:node-outline-key outline) rename-patterns))]
     modified))
 
-; We want to reuse the node outlines from the tpinfo file, but we also
-; need them to display any renamed image names
-(defn- make-tpinfo-node-outline-copies [rename-patterns tpinfo-node-outline]
-  (let [pages (:children tpinfo-node-outline)
-        images (into [] (first (map (fn [x] (:children x)) pages)))]
-    (map (partial modify-outline rename-patterns) images)))
+;; We want to reuse the node outlines from the tpinfo file, but we also
+;; need them to display any renamed image names
+;(defn- make-tpinfo-node-outline-copies [rename-patterns tpinfo-node-outline]
+;  (let [pages (:children tpinfo-node-outline)
+;        images (into [] (first (map (fn [x] (:children x)) pages)))]
+;    (map (partial modify-outline rename-patterns) images)))
+;
+;(g/defnk produce-source-image-copies [_node-id name-to-image-map tpinfo-images]
+;  (prn "MAWE produce-source-image-copies" (keys name-to-image-map))
+;  (let [parent-id (g/node-id->graph-id _node-id)]
+;    (for [name (keys name-to-image-map)]
+;      (g/make-nodes
+;        parent-id
+;        [atlas-image [AtlasAnimationImage {:original-name name}]]
+;        (prn "MAWE inner loop" _node-id atlas-image name)
+;        (attach-image-to-atlas _node-id atlas-image)
+;        ))))
 
 (g/defnode TPAtlasNode
   (inherits resource-node/ResourceNode)
@@ -1014,7 +991,7 @@
   (input tpinfo-page-resources g/Any)                       ; A resource for each png file
   (input tpinfo-node-outline g/Any)
   (input tpinfo-scene g/Any)
-  (input tpinfo-images g/Any)                               ; node id's for each AtlasSourceImageNode
+  (input tpinfo-images g/Any)                               ; node id's for each AtlasAnimationImage
   (input tpinfo-frame-ids g/Any)                            ; List of static frame id's from the .tpinfo file
   (output tpinfo-frame-ids g/Any (gu/passthrough tpinfo-frame-ids))
 
