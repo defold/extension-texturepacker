@@ -265,9 +265,6 @@ public class AtlasBuilder extends Builder<Void> {
             List<String> originalImages = animationBuilder.getImagesList();
             List<String> newImages = Atlas.renameFrameIds(originalImages, renamePatterns);
 
-            for (String s : newImages) {
-                System.out.printf("Renamed animation image: %s\n", s);
-            }
 
             animationBuilder.clearImages();
             animationBuilder.addAllImages(newImages);

@@ -1131,7 +1131,6 @@
          (when-some [parent-node (or atlas (selection->animation selection))]
            (let [workspace (project/workspace project)
                  accept-fn (if atlas
-                             ;(complement (set (g/node-value atlas :image-resources)))
                              (constantly true))]
              (add-images-handler app-view workspace project parent-node accept-fn))))))
 
