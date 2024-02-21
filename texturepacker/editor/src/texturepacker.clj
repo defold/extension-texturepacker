@@ -41,8 +41,7 @@
             [editor.texture-set :as texture-set]
             [schema.core :as s]
             [util.digestable :as digestable])
-  (:import [editor.gl.shader ShaderLifecycle]
-           [com.jogamp.opengl GL GL2]
+  (:import [com.jogamp.opengl GL GL2]
            [java.awt.image BufferedImage]
            [java.lang IllegalArgumentException]
            [java.util List]
@@ -193,7 +192,8 @@
     (condp = pass
       pass/transparent
       (let [{:keys [user-data]} renderable
-            {:keys [vbuf gpu-texture]} user-data
+            {:keys [vbuf]} user-data
+            gpu-texture (or (get user-data :gpu-texture) @texture/white-pixel)
             vertex-binding (vtx/use-with ::atlas-binding vbuf atlas-shader)]
         (gl/with-gl-bindings gl render-args [atlas-shader vertex-binding gpu-texture]
           (shader/set-samplers-by-index atlas-shader gl 0 (:texture-units gpu-texture))
@@ -296,31 +296,37 @@
                           (types/->AABB (Point3d. 0 0 0) (Point3d. width height 0))))))
 
 
-  (output gpu-texture g/Any :cached (g/fnk [_node-id page-resources texture-profiles]
-                                      (let [buffered-images (mapv #(resource-io/with-error-translation % _node-id nil
-                                                                     (image-util/read-image %))
-                                                                  page-resources)
-                                            page-texture-images (mapv #(tex-gen/make-preview-texture-image % texture-profiles)
-                                                                      buffered-images)]
-                                        (texture/texture-images->gpu-texture
-                                          _node-id
-                                          page-texture-images
-                                          {:min-filter gl/nearest
-                                           :mag-filter gl/nearest}))))
+  (output gpu-texture g/Any :cached (g/fnk [_node-id page-resources texture-profiles build-errors]
+                                      (when (not (g/error-fatal? build-errors))
+                                        (let [buffered-images (mapv #(resource-io/with-error-translation % _node-id nil
+                                                                       (image-util/read-image %))
+                                                                    page-resources)
+                                              page-texture-images (mapv #(tex-gen/make-preview-texture-image % texture-profiles)
+                                                                        buffered-images)]
+                                          (texture/texture-images->gpu-texture
+                                            _node-id
+                                            page-texture-images
+                                            {:min-filter gl/nearest
+                                             :mag-filter gl/nearest})))))
 
   (input nodes g/Any :array)
   (output child->order g/Any :cached (g/fnk [nodes] (zipmap nodes (range))))
 
   (input child-scenes g/Any :array)
   (input child-outlines g/Any :array)
+  (input child-build-errors g/Any :array)
 
   (output scene g/Any :cached produce-tpinfo-scene)
 
-  (output node-outline outline/OutlineData (g/fnk [_node-id path child-outlines]
+  (output build-errors g/Any (g/fnk [_node-id child-build-errors]
+                               (g/package-errors _node-id child-build-errors)))
+
+  (output node-outline outline/OutlineData (g/fnk [_node-id path child-outlines build-errors]
                                              {:node-id _node-id
                                               :node-outline-key path
                                               :label path
                                               :icon animation-icon
+                                              :outline-error? (g/error-fatal? build-errors)
                                               :children child-outlines
                                               :read-only true})))
 
@@ -341,12 +347,11 @@
     (.glVertex3d gl x1 y0 0)
     (.glEnd gl)))
 
-(defn- render-image-geometry [^GL2 gl vertices page-height image-height offset-x color]
+(defn- render-image-geometry [^GL2 gl vertices offset-x color]
   (let [[cr cg cb ca] color]
     (.glColor4d gl cr cg cb ca)
     (.glBegin gl GL2/GL_TRIANGLES)
     (doall (map (fn [vert] (let [[x y] vert]
-                             ;(.glVertex3d gl (+ x offset-x) (- page-height (- image-height y)) 0))) vertices))
                              (.glVertex3d gl (+ x offset-x) y 0))) vertices))
     (.glEnd gl)))
 
@@ -357,21 +362,16 @@
           page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))
           color (colors/renderable-outline-color renderable)
           image (:image user-data)
-          page-height (:layout-height user-data)
-          image-height (.height (.rect image))
-          floats (plugin-source-image-get-vertices image page-height)
-          vertices (partition 2 floats)]
-      (render-image-geometry gl vertices page-height image-height page-offset-x color)))
+          vertices (:vertices image)
+          ]
+      (render-image-geometry gl vertices page-offset-x color)))
   (doseq [renderable renderables]
     (let [user-data (-> renderable :user-data)
           page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))
           image (:image user-data)
-          page-height (:layout-height user-data)
-          image-height (.height (.rect image))
-          floats (plugin-source-image-get-vertices image page-height)
-          vertices (partition 2 floats)]
+          vertices (:vertices image)]
       (when (= (-> renderable :updatable :state :frame) (:order user-data))
-        (render-image-geometry gl vertices page-height image-height page-offset-x colors/defold-pink)))))
+        (render-image-geometry gl vertices page-offset-x colors/defold-pink)))))
 
 (defn- render-image-outlines
   [^GL2 gl render-args renderables n]
@@ -389,24 +389,21 @@
         user-data (-> renderable :user-data)
         page-offset-x (get-rect-page-offset (:layout-width user-data) (:page-index user-data))
         image (:image user-data)
-        page-height (:layout-height user-data)
-        image-height (.height (.rect image))
-        floats (plugin-source-image-get-vertices image page-height)
-        vertices (partition 2 floats)]
-    (render-image-geometry gl vertices page-height image-height page-offset-x id-color)))
+        vertices (:vertices image)]
+    (render-image-geometry gl vertices page-offset-x id-color)))
 
 (defn- atlas-rect->editor-rect [rect]
   (types/->Rect (:path rect) (:x rect) (:y rect) (:width rect) (:height rect)))
 
 ; Flips the y -> page-height - y
 (defn- to-rect [name page-height rect]
-  {:path name :x (.x rect) :y (- page-height (.y rect) (.height rect)) :width (.width rect) :height (.height rect)})
+  {:path name :x (:x rect) :y (- page-height (:y rect) (:height rect)) :width (:width rect) :height (:height rect)})
 
 (g/defnk produce-image-scene [_node-id name image order page]
   (let [size (.size page)
         page-width (.width size)
         page-height (.height size)
-        rect (to-rect name page-height (.rect image))
+        rect (to-rect name page-height (:rect image))
         editor-rect (atlas-rect->editor-rect rect)
         aabb (geom/rect->aabb editor-rect)
         page-index (.index page)]
@@ -447,15 +444,15 @@
   (property image g/Any (dynamic visible (g/constantly false))) ; TextureSetLayout$SourceImage
 
   (property size types/Vec2
-            (value (g/fnk [image] (let [rect (.rect image)
-                                        width (.width rect)
-                                        height (.height rect)]
+            (value (g/fnk [image] (let [rect (:rect image)
+                                        width (:width rect)
+                                        height (:height rect)]
                                     [width height])))
             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
             (dynamic read-only? (g/constantly true)))
 
   (property rotated g/Bool
-            (value (g/fnk [image] (.rotated image)))
+            (value (g/fnk [image] (:rotated image)))
             (dynamic read-only? (g/constantly true)))
 
   (output label g/Any :cached (g/fnk [name] (format "%s" name)))
@@ -478,8 +475,12 @@
 ; See TextureSetLayer$Page
 (g/defnode AtlasPageNode
   (inherits outline/OutlineNode)
-  (property name g/Str (dynamic read-only? (g/constantly true)))
+  (property name g/Str (dynamic visible (g/constantly false)))
   (property page g/Any (dynamic visible (g/constantly false)))
+  (property file resource/Resource
+            (dynamic read-only? (g/constantly true))
+            (dynamic error (g/fnk [_node-id file]
+                             (validation/prop-error :fatal _node-id :file validation/prop-resource-not-exists? file ".png"))))
 
   (output width g/Num :cached (g/fnk [page] (.width (.size page))))
   (output height g/Num :cached (g/fnk [page] (.height (.size page))))
@@ -493,19 +494,46 @@
 
   (input nodes g/Any :array)
   (input child-outlines g/Any :array)
+  (input child-build-errors g/Any :array)
 
-  (output node-outline outline/OutlineData (g/fnk [_node-id name label child-outlines]
+  (output own-build-errors g/Any (g/fnk [_node-id file]
+                                   (g/package-errors _node-id
+                                                     (validation/prop-error :fatal _node-id :scene validation/prop-resource-not-exists? file "File"))))
+
+
+  (output build-errors g/Any (g/fnk [_node-id child-build-errors own-build-errors]
+                               (g/package-errors _node-id
+                                                 child-build-errors
+                                                 own-build-errors)))
+
+  (output node-outline outline/OutlineData (g/fnk [_node-id name label child-outlines own-build-errors]
                                              {:node-id _node-id
                                               :node-outline-key name
                                               :label label
                                               :icon tpinfo-icon
                                               :children child-outlines
+                                              :outline-error? (g/error-fatal? own-build-errors)
                                               :read-only true})))
 
-(defn- create-image-node [tpinfo-id page-id image]
+(defn convert-source-image-to-map [image page-height]
+  (let [out (dissoc (bean image) :class)
+        ; vertices is an array of floats (2-tuples) describing a tringle list (every 3 vertices form a triangle)
+        vertices (partition 2 (plugin-source-image-get-vertices image page-height))
+        rect (dissoc (bean (:rect out)) :class)
+        originalSize (:originalSize out)                    ; may be null
+        originalSize (when (not (nil? originalSize))
+                       (dissoc (bean originalSize) :class))]
+    (assoc out
+      :vertices vertices
+      :rect rect
+      :originalSize originalSize)))
+
+(defn- create-image-node [tpinfo-id page-id page image]
   (let [name (.name image)
+        page-height (.width (.size page))
         parent-graph-id (g/node-id->graph-id page-id)
-        image-tx-data (g/make-nodes parent-graph-id [image-id [AtlasSourceImageNode :name name :image image]]
+        image-map (convert-source-image-to-map image page-height)
+        image-tx-data (g/make-nodes parent-graph-id [image-id [AtlasSourceImageNode :name name :image image-map]]
                         (g/connect image-id :_node-id page-id :nodes)
                         (g/connect image-id :node-outline page-id :child-outlines)
                         (g/connect image-id :_node-id tpinfo-id :images)
@@ -516,33 +544,33 @@
 
 (defn- create-image-nodes [tpinfo-id parent-id page]
   (let [images (.images page)
-        tx-data (mapcat (fn [image] (create-image-node tpinfo-id parent-id image)) images)]
+        tx-data (mapcat (fn [image] (create-image-node tpinfo-id parent-id page image)) images)]
     tx-data))
 
 
 (defn- tx-first-created [tx-data]
   (get-in (first tx-data) [:node :_node-id]))
 
-(defn- create-page-node [tpinfo-id page]
+(defn- create-page-node [tpinfo-id page parent-resource]
   (let [name (.name page)
+        page-resource (workspace/resolve-resource parent-resource name)
         parent-graph-id (g/node-id->graph-id tpinfo-id)
-        page-tx-data (g/make-nodes parent-graph-id [page-id [AtlasPageNode :name name :page page]]
+        page-tx-data (g/make-nodes parent-graph-id [page-id [AtlasPageNode :name name :page page :file page-resource]]
                        (g/connect page-id :_node-id tpinfo-id :nodes)
                        (g/connect page-id :node-outline tpinfo-id :child-outlines)
-                       ;(g/connect page :sprites tpinfo-id :child-sprites)
-                       )
+                       (g/connect page-id :build-errors tpinfo-id :child-build-errors))
         page-id (tx-first-created page-tx-data)
         images-tx-data (create-image-nodes tpinfo-id page-id page)]
     (concat page-tx-data images-tx-data)))
 
 
-(defn- create-page [parent-id page]
-  (let [page-tx (create-page-node parent-id page)]
+(defn- create-page [parent-id page parent-resource]
+  (let [page-tx (create-page-node parent-id page parent-resource)]
     page-tx))
 
-(defn- create-pages [parent-id atlas]
+(defn- create-pages [parent-id atlas parent-resource]
   (let [pages (.pages atlas)
-        tx-data (mapcat (fn [page] (create-page parent-id page)) pages)]
+        tx-data (mapcat (fn [page] (create-page parent-id page parent-resource)) pages)]
     tx-data))
 
 ; Loads the .tpinfo file (api is default ddf loader)
@@ -569,19 +597,19 @@
                   (g/set-property self :page-names (.pageImageNames atlas))
                   (g/set-property self :page-resources page-resources))
 
-        all-tx-data (concat tx-data (create-pages self atlas))]
+        all-tx-data (concat tx-data (create-pages self atlas resource))]
     all-tx-data))
 
 (set! *warn-on-reflection* true)
 
-
-(defn- prop-resource-error [nil-severity _node-id prop-kw prop-value prop-name]
-  (validation/prop-error :fatal _node-id prop-kw validation/prop-resource-not-exists? prop-value prop-name))
+;
+;(defn- prop-resource-error [nil-severity _node-id prop-kw prop-value prop-name]
+;  (validation/prop-error :fatal _node-id prop-kw validation/prop-resource-not-exists? prop-value prop-name))
 
 (defn- validate-tpinfo-file [_node-id resource]
   ;; TODO: verify that the page images exist?
-  (or (validation/prop-error :fatal _node-id :material validation/prop-nil? resource "File")
-      (prop-resource-error :fatal _node-id :scene resource ".tpinfo file")))
+  (or (validation/prop-error :fatal _node-id :scene validation/prop-nil? resource "File")
+      (validation/prop-error :fatal _node-id :scene validation/prop-resource-not-exists? resource "File")))
 
 (defn- renderable->handle [renderable]
   (get-in renderable [:user-data :rive-file-handle]))
@@ -979,6 +1007,7 @@
                                             )))
             (dynamic edit-type (g/constantly {:type resource/Resource :ext tpinfo-file-ext}))
             (dynamic error (g/fnk [_node-id file]
+                             (validation/prop-error :fatal _node-id :material validation/prop-resource-not-exists? file ".tpinfo")
                              (validate-tpinfo-file _node-id file))))
 
   (input tpinfo-file-resource resource/Resource)
@@ -1030,6 +1059,7 @@
   (input child-scenes g/Any :array)
   (input child-build-errors g/Any :array)
   (input child-outlines g/Any :array)
+  (input child-source-image-outlines g/Any :array)
 
   (input aabb AABB)
   (output aabb AABB (gu/passthrough aabb))
@@ -1043,13 +1073,13 @@
   (output anim-ids g/Any :cached (g/fnk [animation-ids tpinfo-frame-ids] (filter some? (concat animation-ids tpinfo-frame-ids))))
   (output id-counts NameCounts :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
-  (output node-outline outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline rename-patterns child-outlines own-build-errors]
+  (output node-outline outline/OutlineData :cached (g/fnk [_node-id child-source-image-outlines child-outlines own-build-errors]
                                                      {:node-id _node-id
                                                       :node-outline-key "Atlas"
                                                       :label "Atlas"
                                                       :outline-error? (g/error-fatal? own-build-errors)
                                                       :children (concat
-                                                                  (make-tpinfo-node-outline-copies rename-patterns tpinfo-node-outline)
+                                                                  child-source-image-outlines
                                                                   child-outlines)
                                                       :icon tpatlas-icon}))
 
@@ -1095,7 +1125,7 @@
   (run [app-view selection] (add-animation-group-handler app-view (selection->atlas selection))))
 
 
-(defn- add-images-handler [app-view workspace project parent accept-fn] ; parent = new parent of images
+(defn- add-images-handler [app-view parent] ; parent = new parent of images
   (let [frame-ids (g/node-value parent :frame-ids)
         frame-id-items (map (fn [t] {:text t}) frame-ids)]
     (when-some [items (seq (dialogs/make-select-list-dialog frame-id-items
@@ -1116,8 +1146,7 @@
                                 :else
                                 (let [parent-node-type @(g/node-type* parent)]
                                   (throw (ex-info (str "Unsupported parent type " (:name parent-node-type))
-                                                  {:parent-node-type parent-node-type})))))))
-            ]
+                                                  {:parent-node-type parent-node-type})))))))]
         (g/transact
           (concat
             (g/operation-sequence op-seq)
