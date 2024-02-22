@@ -1,4 +1,5 @@
 file: "/examples/basic/basic.tpinfo"
+rename_patterns: ""
 animations {
   id: "BoxFlip"
   images: "box_fill_128"
@@ -8,3 +9,4 @@ animations {
   flip_horizontal: 0
   flip_vertical: 0
 }
+is_paged_atlas: false

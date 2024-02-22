@@ -436,11 +436,27 @@
         (try (AtlasUtil/replaceStrings rename-patterns id) (catch Exception _ id))
         id))
 
-; See TextureSetLayer$SourceImage
-(g/defnode AtlasSourceImageNode
+(defn prop-id-missing-in? [id ids]
+  (when-not (contains? (set ids) id)
+    (format "'%s' could not be found in .tpinfo file" id)))
+
+(defn- validate-name [node-id name names]
+  (validation/prop-error :fatal node-id :name prop-id-missing-in? name names))
+
+(g/defnode AtlasAnimationImage
   (inherits outline/OutlineNode)
-  (property name g/Str (dynamic read-only? (g/constantly true)))
-  (property image g/Any (dynamic visible (g/constantly false))) ; TextureSetLayout$SourceImage
+
+  (property original-name g/Str
+            (dynamic visible (g/constantly false))
+            (dynamic read-only? (g/constantly true)))
+
+  (property name g/Str
+            (value (g/fnk [original-name rename-patterns] (rename-id original-name rename-patterns)))
+            (dynamic error (g/fnk [_node-id name image-names] (validate-name _node-id name image-names)))
+            (dynamic read-only? (g/constantly true)))
+
+  ; see TextureSetLayout@SourceImage for some reference to this map
+  (property image g/Any (dynamic visible (g/constantly false)))
 
   (property size types/Vec2
             (value (g/fnk [image] (let [rect (:rect image)
@@ -655,8 +671,6 @@
     (g/connect atlas-node :frame-ids animation-node :frame-ids)
     (g/connect atlas-node :name-to-image-map animation-node :name-to-image-map)
     (g/connect atlas-node :image-names animation-node :image-names)
-
-    ;(g/connect atlas-node     :image-path->rect animation-node :image-path->rect)
     (g/connect atlas-node :rename-patterns animation-node :rename-patterns)))
 
 ;; *******************************************************************************************************************
@@ -729,7 +743,7 @@
   (input id-counts NameCounts)
   ; A list of the static frame ids from the texture packer
   (input frame-ids g/Any)
-  ; A map from source image name to the node id of the AtlasSourceImageNode
+  ; A map from source image name to the node id of the single frame AnimationImage nodes
   (input name-to-image-map g/Any)
 
   (input image-names g/Any)
@@ -946,23 +960,13 @@
   (let [modified (assoc outline :label (rename-id (:node-outline-key outline) rename-patterns))]
     modified))
 
-;; We want to reuse the node outlines from the tpinfo file, but we also
-;; need them to display any renamed image names
-;(defn- make-tpinfo-node-outline-copies [rename-patterns tpinfo-node-outline]
-;  (let [pages (:children tpinfo-node-outline)
-;        images (into [] (first (map (fn [x] (:children x)) pages)))]
-;    (map (partial modify-outline rename-patterns) images)))
-;
-;(g/defnk produce-source-image-copies [_node-id name-to-image-map tpinfo-images]
-;  (prn "MAWE produce-source-image-copies" (keys name-to-image-map))
-;  (let [parent-id (g/node-id->graph-id _node-id)]
-;    (for [name (keys name-to-image-map)]
-;      (g/make-nodes
-;        parent-id
-;        [atlas-image [AtlasAnimationImage {:original-name name}]]
-;        (prn "MAWE inner loop" _node-id atlas-image name)
-;        (attach-image-to-atlas _node-id atlas-image)
-;        ))))
+; We want to reuse the node outlines from the tpinfo file, but we also
+; need them to display any renamed image names
+(defn- make-tpinfo-node-outline-copies [rename-patterns tpinfo-node-outline]
+  (let [pages (:children tpinfo-node-outline)
+        result (map (fn [x] (:children x)) pages)
+        images (flatten result)]
+    (map (partial modify-outline rename-patterns) images)))
 
 (g/defnode TPAtlasNode
   (inherits resource-node/ResourceNode)
@@ -1050,13 +1054,13 @@
   (output anim-ids g/Any :cached (g/fnk [animation-ids tpinfo-frame-ids] (filter some? (concat animation-ids tpinfo-frame-ids))))
   (output id-counts NameCounts :cached (g/fnk [anim-ids] (frequencies anim-ids)))
 
-  (output node-outline outline/OutlineData :cached (g/fnk [_node-id child-source-image-outlines child-outlines own-build-errors]
+  (output node-outline outline/OutlineData :cached (g/fnk [_node-id tpinfo-node-outline rename-patterns child-outlines own-build-errors]
                                                      {:node-id _node-id
                                                       :node-outline-key "Atlas"
                                                       :label "Atlas"
                                                       :outline-error? (g/error-fatal? own-build-errors)
                                                       :children (concat
-                                                                  child-source-image-outlines
+                                                                  (make-tpinfo-node-outline-copies rename-patterns tpinfo-node-outline)
                                                                   child-outlines)
                                                       :icon tpatlas-icon}))
 
