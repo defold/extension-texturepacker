@@ -100,6 +100,7 @@
     ))
 (set! *warn-on-reflection* true)
 
+; return Atlas (Atlas.java)
 (defn- plugin-create-atlas [path tpinfo-as-bytes]
   (plugin-invoke-static tp-plugin-cls "createAtlas" (into-array Class [String byte-array-cls]) [path tpinfo-as-bytes]))
 
@@ -867,12 +868,13 @@
          :content (protobuf/pb->bytes (plugin-create-texture path paged-atlas atlas buffered-images texture-profile))}))))
 
 (defn make-array-texture-build-target
-  [workspace node-id paged-atlas atlas tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile]
+  [workspace node-id paged-atlas atlas texture-page-count tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile]
   (let [texture-type (workspace/get-resource-type workspace "texture")
         texture-profile-pb (protobuf/pb->map texture-profile)
         texture-hash (digestable/sha1-hash
                        {:pages-sha1 tpinfo-page-resources-sha1
                         :texture-profile texture-profile-pb
+                        :texture-page-count texture-page-count
                         :paged-atlas paged-atlas})
         texture-resource (resource/make-memory-resource workspace texture-type texture-hash)]
     {:node-id node-id
@@ -882,11 +884,12 @@
      :user-data {:node-id node-id
                  :page-resources tpinfo-page-resources
                  :texture-profile texture-profile
+                 :texture-page-count texture-page-count
                  :paged-atlas paged-atlas
                  :atlas atlas}}))
 
 
-(g/defnk produce-tpatlas-build-targets [_node-id resource build-errors tpinfo is-paged-atlas atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings]
+(g/defnk produce-tpatlas-build-targets [_node-id resource build-errors tpinfo texture-page-count is-paged-atlas atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings]
   (g/precluding-errors build-errors
     (let [project (project/get-project _node-id)
           workspace (project/workspace project)
@@ -897,7 +900,7 @@
 
           use-paged-texture (or (has-multi-pages tpinfo) is-paged-atlas)
 
-          texture-resource (make-array-texture-build-target workspace _node-id use-paged-texture atlas tpinfo-page-resources tpinfo-page-resources-sha1 tex-profile)
+          texture-resource (make-array-texture-build-target workspace _node-id use-paged-texture atlas texture-page-count tpinfo-page-resources tpinfo-page-resources-sha1 tex-profile)
 
           pb-msg (protobuf/pb->map texture-set)
           dep-build-targets [texture-resource]]
@@ -1012,9 +1015,17 @@
   (property rename-patterns g/Str
             (dynamic error (g/fnk [_node-id rename-patterns] (validate-rename-patterns _node-id rename-patterns))))
 
+  ; user setting, to manually choose if an atlas with a single page should use a texture array or not
   (property is-paged-atlas g/Bool
             (dynamic visible (g/fnk [tpinfo] (not (has-multi-pages tpinfo))))
             (dynamic read-only? (g/fnk [tpinfo] (has-multi-pages tpinfo))))
+
+  (output use-texture-array g/Bool (g/fnk [tpinfo is-paged-atlas] (or (has-multi-pages tpinfo) is-paged-atlas)))
+
+  (output texture-page-count g/Int (g/fnk [file use-texture-array tpinfo-page-resources]
+                                     (if use-texture-array
+                                       (count tpinfo-page-resources)
+                                       texture/non-paged-page-count)))
 
   (input build-settings g/Any)
   (input texture-profiles g/Any)
