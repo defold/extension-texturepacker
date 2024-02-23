@@ -21,6 +21,7 @@
             [editor.gl.shader :as shader]
             [editor.gl.texture :as texture]
             [editor.gl.vertex :as vtx]
+            [editor.gl.vertex2 :as vtx2]
             [editor.image-util :as image-util]
             [editor.defold-project :as project]
             [editor.resource :as resource]
@@ -137,6 +138,11 @@
     [width height]))
 
 (vtx/defvertex texture-vtx
+  (vec4 position)
+  (vec2 texcoord0)
+  (vec1 page_index))
+
+(vtx2/defvertex texture-vtx2
   (vec4 position)
   (vec2 texcoord0)
   (vec1 page_index))
@@ -716,7 +722,7 @@
    :images (sort-by-order-and-get-image img-ddf)})
 
 (defn render-animation [^GL2 gl render-args renderables n]
-  (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx atlas-shader))
+  (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx2 atlas-shader))
 
 (g/defnk produce-animation-updatable [_node-id id anim-data]
   (texture-set/make-animation-updatable _node-id "Atlas Animation" (get anim-data id)))
