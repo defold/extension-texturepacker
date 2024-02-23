@@ -249,13 +249,12 @@
      :children (into child-renderables
                      child-scenes)}))
 
-(g/defnk produce-tpatlas-scene [_node-id size atlas texture-profiles tpinfo-scene]
+(g/defnk produce-tpatlas-scene [_node-id size atlas texture-profiles tpinfo-scene child-scenes]
   (let [[width height] size]
     (if (nil? tpinfo-scene)
       {:info-text (format "Atlas: 0 pages 0 x 0")}
       {:info-text (format "Atlas: %d pages %d x %d (%s profile)" (count (.pages atlas)) (int width) (int height) (:name texture-profiles))
-       :children [tpinfo-scene]}
-      )))
+       :children (into [tpinfo-scene] child-scenes)})))
 
 (set! *warn-on-reflection* true)
 
@@ -399,7 +398,7 @@
 (defn- to-rect [name page-height rect]
   {:path name :x (:x rect) :y (- page-height (:y rect) (:height rect)) :width (:width rect) :height (:height rect)})
 
-(g/defnk produce-image-scene [_node-id name image image-order page]
+(g/defnk produce-image-scene [_node-id name image image-order page animation-updatable]
   (let [size (.size page)
         page-width (.width size)
         page-height (.height size)
@@ -429,8 +428,7 @@
                                           :layout-height page-height
                                           :page-index page-index}
                               :passes [pass/selection]}}]
-     ;:updatable animation-updatable
-     }))
+     :updatable animation-updatable}))
 
 (defn- rename-id [id rename-patterns]
     (if rename-patterns
@@ -472,7 +470,7 @@
 
   (input image-names g/Any) ; a list of original image names (i.e. not renamed)
 
-  (input animation g/Any) ; nil if this is a source image from the tpinfo file
+  (input animation-updatable g/Any)
 
   (input child->order g/Any)
 
@@ -654,7 +652,7 @@
     ;(g/connect image-node :scene animation-node :child-scenes)
     (g/connect animation-node :child->order image-node :child->order)
     (g/connect animation-node :image-names image-node :image-names)
-    ;(g/connect animation-node :updatable image-node :animation-updatable)
+    (g/connect animation-node :updatable image-node :animation-updatable)
     (g/connect animation-node :rename-patterns image-node :rename-patterns)))
 
 
@@ -672,7 +670,9 @@
     (g/connect atlas-node :frame-ids animation-node :frame-ids)
     (g/connect atlas-node :name-to-image-map animation-node :name-to-image-map)
     (g/connect atlas-node :image-names animation-node :image-names)
-    (g/connect atlas-node :rename-patterns animation-node :rename-patterns)))
+    (g/connect atlas-node :rename-patterns animation-node :rename-patterns)
+    (g/connect atlas-node :gpu-texture animation-node :gpu-texture)
+    (g/connect atlas-node :anim-data animation-node :anim-data)))
 
 ;; *******************************************************************************************************************
 ;; AtlasAnimation
@@ -721,6 +721,20 @@
 (g/defnk produce-animation-updatable [_node-id id anim-data]
   (texture-set/make-animation-updatable _node-id "Atlas Animation" (get anim-data id)))
 
+(g/defnk produce-animation-scene [_node-id id child-scenes gpu-texture updatable anim-data]
+  (prn "MAWE produce-animation-scene" id updatable)
+  {:node-id    _node-id
+   :aabb       geom/null-aabb
+   :renderable {:render-fn render-animation
+                :tags #{:atlas}
+                :batch-key nil
+                :user-data {:gpu-texture gpu-texture
+                            :anim-id     id
+                            :anim-data   (get anim-data id)}
+                :passes    [pass/overlay pass/selection]}
+   :updatable  updatable
+   :children   child-scenes})
+
 ; Structure that holds all information for an animation with multiple frames
 (g/defnode AtlasAnimation
   (inherits core/Scope)
@@ -753,6 +767,7 @@
   (input child-scenes g/Any :array)
   (input child-build-errors g/Any :array)
   (input anim-data g/Any)
+  (input gpu-texture g/Any)
 
   (input rename-patterns g/Str)
   (output rename-patterns g/Str (gu/passthrough rename-patterns))
@@ -1079,7 +1094,7 @@
 
   (output save-value g/Any :cached produce-tpatlas-save-value)
   (output build-targets g/Any :cached produce-tpatlas-build-targets)
-  ;(output updatable        g/Any          (g/fnk [] nil))
+  (output updatable g/Any (g/fnk [] nil))
   (output scene g/Any :cached produce-tpatlas-scene)
 
   (output own-build-errors g/Any produce-tpatlas-own-build-errors)
