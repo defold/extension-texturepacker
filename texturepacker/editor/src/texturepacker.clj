@@ -404,7 +404,12 @@
 (defn- to-rect [name page-height rect]
   {:path name :x (:x rect) :y (- page-height (:y rect) (:height rect)) :width (:width rect) :height (:height rect)})
 
-(g/defnk produce-image-scene [_node-id name image image-order page animation-updatable]
+(defn- get-scene-from-image [name-to-image-map name]
+  (let [image-node (get name-to-image-map name) ;  get the source image
+        scene (g/node-value image-node :scene)]
+    scene))
+
+(defn- produce-scene-from-image [_node-id image image-order page animation-updatable]
   (let [size (.size page)
         page-width (.width size)
         page-height (.height size)
@@ -435,6 +440,11 @@
                                           :page-index page-index}
                               :passes [pass/selection]}}]
      :updatable animation-updatable}))
+(g/defnk produce-image-scene [_node-id name name-to-image-map image image-order page animation-updatable]
+  (let [scene (if (nil? page)
+                (get-scene-from-image name-to-image-map name)
+                (produce-scene-from-image _node-id image image-order page animation-updatable))]
+    (assoc scene :node-id _node-id)))
 
 (defn- rename-id [id rename-patterns]
     (if rename-patterns
@@ -475,6 +485,7 @@
   (input rename-patterns g/Str)
 
   (input image-names g/Any) ; a list of original image names (i.e. not renamed)
+  (input name-to-image-map g/Any) ; a map from original image names to source image nodes
 
   (input animation-updatable g/Any)
 
@@ -655,8 +666,9 @@
     (g/connect image-node :build-errors animation-node :child-build-errors)
     (g/connect image-node :ddf-message animation-node :img-ddf)
     (g/connect image-node :node-outline animation-node :child-outlines)
-    ;(g/connect image-node :scene animation-node :child-scenes)
+    (g/connect image-node :scene animation-node :child-scenes)
     (g/connect animation-node :child->order image-node :child->order)
+    (g/connect animation-node :name-to-image-map image-node :name-to-image-map)
     (g/connect animation-node :image-names image-node :image-names)
     (g/connect animation-node :updatable image-node :animation-updatable)
     (g/connect animation-node :rename-patterns image-node :rename-patterns)))
@@ -728,7 +740,6 @@
   (texture-set/make-animation-updatable _node-id "Atlas Animation" (get anim-data id)))
 
 (g/defnk produce-animation-scene [_node-id id child-scenes gpu-texture updatable anim-data]
-  (prn "MAWE produce-animation-scene" id updatable)
   {:node-id    _node-id
    :aabb       geom/null-aabb
    :renderable {:render-fn render-animation
@@ -766,6 +777,7 @@
   (input frame-ids g/Any)
   ; A map from source image name to the node id of the single frame AnimationImage nodes
   (input name-to-image-map g/Any)
+  (output name-to-image-map g/Any (gu/passthrough name-to-image-map))
 
   (input image-names g/Any)
   (output image-names g/Any (gu/passthrough image-names))
