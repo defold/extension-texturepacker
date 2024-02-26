@@ -80,11 +80,6 @@ public class Atlas {
             atlas.animations = AtlasBuilder.createSingleFrameAnimations(atlas.frameIds);
         }
 
-        // System.out.printf("MAWE atlas: %s\n", path);
-        // for (String s : atlas.frameIds) {
-        //     System.out.printf("MAWE frameids: %s\n", s);
-        // }
-
         atlas.pages = AtlasBuilder.createPages(tpinfo);
         atlas.layouts = TextureSetLayout.createTextureSet(atlas.pages);
 
@@ -92,10 +87,6 @@ public class Atlas {
         for (Info.Page page : tpinfo.getPagesList()) {
             atlas.pageImageNames.add(page.getName());
         }
-
-        // // TODO: Use a setting in .tpatlas / array_texture
-        // TextureImage.Type textureImageType = TextureImage.Type.TYPE_2D_ARRAY;
-
         return atlas;
     }
 
@@ -131,7 +122,7 @@ public class Atlas {
     }
 
     // Used from editor
-    static public TextureImage createTexture(String path, Boolean isPaged, Atlas atlas, BufferedImage[] textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
+    static public TextureImage createTexture(String path, Boolean isPaged, BufferedImage[] textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
         TextureImage.Type textureImageType = isPaged ? TextureImage.Type.TYPE_2D_ARRAY : TextureImage.Type.TYPE_2D;
 
         boolean compress = textureProfile != null;
