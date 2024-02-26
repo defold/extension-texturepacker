@@ -115,10 +115,10 @@
   (plugin-invoke-static tp-plugin-cls "createTextureSetResult" (into-array Class [String tp-plugin-cls String]) [path atlas texture-path]))
 
 ; Creates the final texture (com.dynamo.graphics.proto.Graphics.TextureImage)
-(defn- plugin-create-texture ^Graphics$TextureImage [path is-paged atlas bufferedimages texture-profile]
+(defn- plugin-create-texture ^Graphics$TextureImage [path is-paged bufferedimages texture-profile]
   (plugin-invoke-static tp-plugin-cls "createTexture"
-                        (into-array Class [String Boolean tp-plugin-cls bufferedimage-array-cls Graphics$TextureProfile])
-                        [path is-paged atlas bufferedimages texture-profile]))
+                        (into-array Class [String Boolean bufferedimage-array-cls Graphics$TextureProfile])
+                        [path is-paged bufferedimages texture-profile]))
 
 ; Returns a float array (2-tuples) that is a triangle list: [t0.x0, t0.y0, t0.x1, t0.y1, t0.x2, t0.y2, t1.x0, t1.y0, ...]
 (defn- plugin-source-image-get-vertices [image page-height]
@@ -901,7 +901,7 @@
     (> (count (:pages tpinfo)) 1)))
 
 (defn- build-array-texture [resource _dep-resources user-data]
-  (let [{:keys [node-id paged-atlas atlas page-resources texture-profile]} user-data]
+  (let [{:keys [node-id paged-atlas page-resources texture-profile]} user-data]
     (g/precluding-errors
       []
       (let [path (resource/path resource)
@@ -910,10 +910,10 @@
                                   page-resources)
             buffered-images (into-array BufferedImage buffered-images)]
         {:resource resource
-         :content (protobuf/pb->bytes (plugin-create-texture path paged-atlas atlas buffered-images texture-profile))}))))
+         :content (protobuf/pb->bytes (plugin-create-texture path paged-atlas buffered-images texture-profile))}))))
 
 (defn make-array-texture-build-target
-  [workspace node-id paged-atlas atlas texture-page-count tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile]
+  [workspace node-id paged-atlas texture-page-count tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile]
   (let [texture-type (workspace/get-resource-type workspace "texture")
         texture-profile-pb (protobuf/pb->map texture-profile)
         texture-hash (digestable/sha1-hash
@@ -922,16 +922,16 @@
                         :texture-page-count texture-page-count
                         :paged-atlas paged-atlas})
         texture-resource (resource/make-memory-resource workspace texture-type texture-hash)]
-    {:node-id node-id
-     :resource (workspace/make-build-resource texture-resource)
-     :build-fn build-array-texture
-     :content-hash texture-hash
-     :user-data {:node-id node-id
-                 :page-resources tpinfo-page-resources
-                 :texture-profile texture-profile
-                 :texture-page-count texture-page-count
-                 :paged-atlas paged-atlas
-                 :atlas atlas}}))
+    (bt/with-content-hash
+      {:node-id node-id
+       :resource (workspace/make-build-resource texture-resource)
+       :build-fn build-array-texture
+       :user-data {:node-id node-id
+                   :page-resources tpinfo-page-resources ; the page images: page-0.png, page-1.png etc
+                   :texture-profile-pb texture-profile-pb          ; for easy digest
+                   :digest-ignored/texture-profile texture-profile ; for passing to the java build function
+                   :texture-page-count texture-page-count
+                   :paged-atlas paged-atlas}})))
 
 
 (g/defnk produce-tpatlas-build-targets [_node-id resource build-errors tpinfo texture-page-count is-paged-atlas atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings]
@@ -945,7 +945,7 @@
 
           use-paged-texture (or (has-multi-pages tpinfo) is-paged-atlas)
 
-          texture-resource (make-array-texture-build-target workspace _node-id use-paged-texture atlas texture-page-count tpinfo-page-resources tpinfo-page-resources-sha1 tex-profile)
+          texture-resource (make-array-texture-build-target workspace _node-id use-paged-texture texture-page-count tpinfo-page-resources tpinfo-page-resources-sha1 tex-profile)
 
           pb-msg (protobuf/pb->map texture-set)
           dep-build-targets [texture-resource]]
@@ -1047,7 +1047,7 @@
   (input tpinfo-frame-ids g/Any)                            ; List of static frame id's from the .tpinfo file
   (output tpinfo-frame-ids g/Any (gu/passthrough tpinfo-frame-ids))
 
-  (input tpinfo g/Any)                                      ; map of Atlas.Info from tpinfo_ddf.proto
+  (input tpinfo g/Any)                                      ; map created from Info.Atlas from tpinfo_ddf.proto
   (input tpinfo-size g/Any)
 
   (property tpatlas g/Any (dynamic visible (g/constantly false)))
