@@ -52,4 +52,6 @@ message Page
 message Atlas
 {
     repeated Page pages = 1;
+    optional string version = 2;     // E.g. "1.0"
+    optional string description = 3; // E.g. "TexturePacker exporter"
 }

@@ -291,6 +291,14 @@
             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
             (dynamic read-only? (g/constantly true)))
 
+  (property version g/Str
+            (value (g/fnk [tpinfo] (:version tpinfo)))
+            (dynamic read-only? (g/constantly true)))
+
+  (property description g/Str
+            (value (g/fnk [tpinfo] (:description tpinfo)))
+            (dynamic read-only? (g/constantly true)))
+
   (property page-resources g/Any (dynamic visible (g/constantly false)))
 
   (input texture-profiles g/Any)
