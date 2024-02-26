@@ -7,53 +7,53 @@
 ;
 
 (ns editor.texturepacker
-  (:require [editor.protobuf :as protobuf]
-            [dynamo.graph :as g]
+  (:require [dynamo.graph :as g]
             [editor.app-view :as app-view]
+            [editor.build-target :as bt]
             [editor.colors :as colors]
             [editor.core :as core]
+            [editor.defold-project :as project]
             [editor.dialogs :as dialogs]
-            [editor.graph-util :as gu]
-            [editor.handler :as handler]
             [editor.geom :as geom]
-            [editor.math :as math]
             [editor.gl :as gl]
+            [editor.gl.pass :as pass]
             [editor.gl.shader :as shader]
             [editor.gl.texture :as texture]
             [editor.gl.vertex :as vtx]
             [editor.gl.vertex2 :as vtx2]
+            [editor.graph-util :as gu]
+            [editor.handler :as handler]
             [editor.image-util :as image-util]
-            [editor.defold-project :as project]
+            [editor.math :as math]
+            [editor.outline :as outline]
+            [editor.pipeline :as pipeline]
+            [editor.pipeline.tex-gen :as tex-gen]
+            [editor.properties :as properties]
+            [editor.protobuf :as protobuf]
             [editor.resource :as resource]
+            [editor.resource-io :as resource-io]
             [editor.resource-node :as resource-node]
             [editor.scene-picking :as scene-picking]
-    ;; [editor.render :as render]
+            [editor.texture-set :as texture-set]
+            [editor.types :as types]
             [editor.types :as types]
             [editor.validation :as validation]
             [editor.workspace :as workspace]
             [editor.workspace :as workspace]
-            [editor.gl.pass :as pass]
-            [editor.types :as types]
-            [editor.outline :as outline]
-            [editor.properties :as properties]
-            [editor.pipeline :as pipeline]
-            [editor.pipeline.tex-gen :as tex-gen]
-            [editor.resource-io :as resource-io]
-            [editor.texture-set :as texture-set]
             [schema.core :as s]
             [util.digestable :as digestable])
-  (:import [com.jogamp.opengl GL GL2]
-           [java.awt.image BufferedImage]
-           [java.lang IllegalArgumentException]
-           [java.util List]
-           [javax.vecmath Matrix4d Point3d Vector3d]
-           [editor.types Animation Image AABB]
-           [com.dynamo.gamesys.proto Tile$Playback]
-           [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
-           [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
-           [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
+  (:import [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
            [com.dynamo.bob.textureset TextureSetLayout$SourceImage]
-           [java.lang String]))
+           [java.lang IllegalArgumentException]
+           [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
+           [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
+           [com.jogamp.opengl GL GL2]
+           [com.dynamo.gamesys.proto Tile$Playback]
+           [editor.types AABB Animation Image]
+           [java.awt.image BufferedImage]
+           [java.lang String]
+           [java.util List]
+           [javax.vecmath Matrix4d Point3d Vector3d]))
 
 (set! *warn-on-reflection* true)
 
@@ -101,22 +101,26 @@
     ))
 (set! *warn-on-reflection* true)
 
+; Creates an instance of tp-plugin-cls, using tpinfo data only (for use with the TPInfoNode)
 ; return Atlas (Atlas.java)
 (defn- plugin-create-atlas [path tpinfo-as-bytes]
   (plugin-invoke-static tp-plugin-cls "createAtlas" (into-array Class [String byte-array-cls]) [path tpinfo-as-bytes]))
 
+; Creates an instance of tp-plugin-cls, using both tpinfo and tpatlas data (for use with the TPAtlasNode)
 (defn- plugin-create-full-atlas [path tpatlas-as-bytes tpinfo-as-bytes]
   (plugin-invoke-static tp-plugin-cls "createFullAtlas" (into-array Class [String byte-array-cls byte-array-cls]) [path tpatlas-as-bytes tpinfo-as-bytes]))
 
-;  Returns a Pair<TextureSet, List<extureSetGenerator.UVTransform>> (.left, .right)
+;  Returns a Pair<TextureSet, List<TextureSetGenerator.UVTransform>> (.left, .right)
 (defn- plugin-create-texture-set-result [path atlas texture-path]
   (plugin-invoke-static tp-plugin-cls "createTextureSetResult" (into-array Class [String tp-plugin-cls String]) [path atlas texture-path]))
 
+; Creates the final texture (com.dynamo.graphics.proto.Graphics.TextureImage)
 (defn- plugin-create-texture ^Graphics$TextureImage [path is-paged atlas bufferedimages texture-profile]
   (plugin-invoke-static tp-plugin-cls "createTexture"
                         (into-array Class [String Boolean tp-plugin-cls bufferedimage-array-cls Graphics$TextureProfile])
                         [path is-paged atlas bufferedimages texture-profile]))
 
+; Returns a float array (2-tuples) that is a triangle list: [t0.x0, t0.y0, t0.x1, t0.y1, t0.x2, t0.y2, t1.x0, t1.y0, ...]
 (defn- plugin-source-image-get-vertices [image page-height]
   (plugin-invoke-static tp-plugin-cls "getTriangles" (into-array Class [TextureSetLayout$SourceImage Float]) [image page-height]))
 
