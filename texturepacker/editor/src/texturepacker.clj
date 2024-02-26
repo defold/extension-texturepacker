@@ -934,7 +934,7 @@
                    :paged-atlas paged-atlas}})))
 
 
-(g/defnk produce-tpatlas-build-targets [_node-id resource build-errors tpinfo texture-page-count is-paged-atlas atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings]
+(g/defnk produce-tpatlas-build-targets [_node-id resource build-errors tpinfo texture-page-count is-paged-atlas texture-set tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile build-settings]
   (g/precluding-errors build-errors
     (let [project (project/get-project _node-id)
           workspace (project/workspace project)
