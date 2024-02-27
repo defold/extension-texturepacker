@@ -654,14 +654,14 @@
 
 (set! *warn-on-reflection* true)
 
-;
-;(defn- prop-resource-error [nil-severity _node-id prop-kw prop-value prop-name]
-;  (validation/prop-error :fatal _node-id prop-kw validation/prop-resource-not-exists? prop-value prop-name))
+(defn- build-errors? [errors name]
+  (when (g/error-fatal? errors)
+    (format "'%s' has build errors" name)))
 
-(defn- validate-tpinfo-file [_node-id resource]
-  ;; TODO: verify that the page images exist?
+(defn- validate-tpinfo-file [_node-id resource build-errors]
   (or (validation/prop-error :fatal _node-id :scene validation/prop-nil? resource "File")
-      (validation/prop-error :fatal _node-id :scene validation/prop-resource-not-exists? resource "File")))
+      (validation/prop-error :fatal _node-id :scene validation/prop-resource-not-exists? resource "File")
+      (validation/prop-error :fatal _node-id :scene build-errors? build-errors "File")))
 
 (defn- renderable->handle [renderable]
   (get-in renderable [:user-data :rive-file-handle]))
@@ -884,9 +884,7 @@
 
 (g/defnk produce-tpatlas-own-build-errors [_node-id file rename-patterns]
   (g/package-errors _node-id
-                    ; TODO: Make sure we verify the animation image names
-                    (validate-rename-patterns _node-id rename-patterns)
-                    (validate-tpinfo-file _node-id file)))
+                    (validate-rename-patterns _node-id rename-patterns)))
 
 (defn- is-atlas-paged [tpinfo paged-atlas]
   (if (nil? tpinfo)
@@ -1030,25 +1028,15 @@
                                             [:images :tpinfo-images]
                                             [:frame-ids :tpinfo-frame-ids]
                                             [:page-resources :tpinfo-page-resources]
+                                            [:build-errors :tpinfo-build-errors]
                                             [:scene :tpinfo-scene]
                                             [:aabb :aabb]
                                             [:gpu-texture :gpu-texture]
                                             )))
             (dynamic edit-type (g/constantly {:type resource/Resource :ext tpinfo-file-ext}))
-            (dynamic error (g/fnk [_node-id file]
+            (dynamic error (g/fnk [_node-id file tpinfo-build-errors]
                              (validation/prop-error :fatal _node-id :material validation/prop-resource-not-exists? file ".tpinfo")
-                             (validate-tpinfo-file _node-id file))))
-
-  (input tpinfo-file-resource resource/Resource)
-  (input tpinfo-page-resources g/Any)                       ; A resource for each png file
-  (input tpinfo-node-outline g/Any)
-  (input tpinfo-scene g/Any)
-  (input tpinfo-images g/Any)                               ; node id's for each AtlasAnimationImage
-  (input tpinfo-frame-ids g/Any)                            ; List of static frame id's from the .tpinfo file
-  (output tpinfo-frame-ids g/Any (gu/passthrough tpinfo-frame-ids))
-
-  (input tpinfo g/Any)                                      ; map created from Info.Atlas from tpinfo_ddf.proto
-  (input tpinfo-size g/Any)
+                             (validate-tpinfo-file _node-id file tpinfo-build-errors))))
 
   (property tpatlas g/Any (dynamic visible (g/constantly false)))
 
@@ -1064,6 +1052,18 @@
   (property is-paged-atlas g/Bool
             (dynamic visible (g/fnk [tpinfo] (not (has-multi-pages tpinfo))))
             (dynamic read-only? (g/fnk [tpinfo] (has-multi-pages tpinfo))))
+
+  (input tpinfo-build-errors g/Any)
+  (input tpinfo-file-resource resource/Resource)
+  (input tpinfo-page-resources g/Any)                       ; A resource for each png file
+  (input tpinfo-node-outline g/Any)
+  (input tpinfo-scene g/Any)
+  (input tpinfo-images g/Any)                               ; node id's for each AtlasAnimationImage
+  (input tpinfo-frame-ids g/Any)                            ; List of static frame id's from the .tpinfo file
+  (output tpinfo-frame-ids g/Any (gu/passthrough tpinfo-frame-ids))
+
+  (input tpinfo g/Any)                                      ; map created from Info.Atlas from tpinfo_ddf.proto
+  (input tpinfo-size g/Any)
 
   (output use-texture-array g/Bool (g/fnk [tpinfo is-paged-atlas] (or (has-multi-pages tpinfo) is-paged-atlas)))
 
@@ -1128,8 +1128,9 @@
   (output scene g/Any :cached produce-tpatlas-scene)
 
   (output own-build-errors g/Any produce-tpatlas-own-build-errors)
-  (output build-errors g/Any (g/fnk [_node-id child-build-errors own-build-errors]
+  (output build-errors g/Any (g/fnk [_node-id tpinfo-build-errors child-build-errors own-build-errors]
                                (g/package-errors _node-id
+                                                 (g/unpack-errors tpinfo-build-errors)
                                                  child-build-errors
                                                  own-build-errors))))
 
