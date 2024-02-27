@@ -77,6 +77,7 @@ public class AtlasBuilder extends Builder<Void> {
 
         for (Info.Page page : infoAtlas.getPagesList()) {
             IResource r = infoResource.getResource(page.getName());
+            BuilderUtil.checkResource(this.project, input, "page image", r.getPath());
             taskBuilder.addInput(r);
         }
 
