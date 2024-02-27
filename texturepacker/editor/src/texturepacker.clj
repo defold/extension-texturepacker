@@ -1254,20 +1254,6 @@
 
 ;; *******************************************************************************************************************
 
-(require 'dev)
-(defn- debug []
-  (g/clear-system-cache!)
-  (let [current (dev/active-resource)
-        ;no (g/node-value current :node-outline)
-        ;tpno (g/node-value current :tpinfo-node-outline)
-        ;out (g/node-value current :frame-ids)
-        ;out (g/node-value current :animations)
-        ;out (g/node-value current :anim-ids)
-        ;out (g/node-value current :anim-data)
-        out (g/node-value current :paged-atlas)
-        ]
-    out))
-
 (defn register-resource-types [workspace]
   (concat
 
