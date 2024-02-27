@@ -46,9 +46,9 @@
            [com.dynamo.bob.textureset TextureSetLayout$SourceImage]
            [java.lang IllegalArgumentException]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
+           [com.dynamo.gamesys.proto Tile$Playback]
            [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
            [com.jogamp.opengl GL GL2]
-           [com.dynamo.gamesys.proto Tile$Playback]
            [editor.types AABB Animation Image]
            [java.awt.image BufferedImage]
            [java.lang String]
@@ -417,7 +417,7 @@
   {:path name :x (:x rect) :y (- page-height (:y rect) (:height rect)) :width (:width rect) :height (:height rect)})
 
 (defn- get-scene-from-image [name-to-image-map name]
-  (let [image-node (get name-to-image-map name) ;  get the source image
+  (let [image-node (get name-to-image-map name)             ;  get the source image
         scene (g/node-value image-node :scene)]
     scene))
 
@@ -459,9 +459,9 @@
     (assoc scene :node-id _node-id)))
 
 (defn- rename-id [id rename-patterns]
-    (if rename-patterns
-        (try (AtlasUtil/replaceStrings rename-patterns id) (catch Exception _ id))
-        id))
+  (if rename-patterns
+    (try (AtlasUtil/replaceStrings rename-patterns id) (catch Exception _ id))
+    id))
 
 (defn prop-id-missing-in? [id ids]
   (when-not (contains? (set ids) id)
@@ -496,8 +496,8 @@
   (input page g/Any)
   (input rename-patterns g/Str)
 
-  (input image-names g/Any) ; a list of original image names (i.e. not renamed)
-  (input name-to-image-map g/Any) ; a map from original image names to source image nodes
+  (input image-names g/Any)                                 ; a list of original image names (i.e. not renamed)
+  (input name-to-image-map g/Any)                           ; a map from original image names to source image nodes
 
   (input animation-updatable g/Any)
 
@@ -752,17 +752,17 @@
   (texture-set/make-animation-updatable _node-id "Atlas Animation" (get anim-data id)))
 
 (g/defnk produce-animation-scene [_node-id id child-scenes gpu-texture updatable anim-data]
-  {:node-id    _node-id
-   :aabb       geom/null-aabb
+  {:node-id _node-id
+   :aabb geom/null-aabb
    :renderable {:render-fn render-animation
                 :tags #{:atlas}
                 :batch-key nil
                 :user-data {:gpu-texture gpu-texture
-                            :anim-id     id
-                            :anim-data   (get anim-data id)}
-                :passes    [pass/overlay pass/selection]}
-   :updatable  updatable
-   :children   child-scenes})
+                            :anim-id id
+                            :anim-data (get anim-data id)}
+                :passes [pass/overlay pass/selection]}
+   :updatable updatable
+   :children child-scenes})
 
 ; Structure that holds all information for an animation with multiple frames
 (g/defnode AtlasAnimation
@@ -925,8 +925,8 @@
        :resource (workspace/make-build-resource texture-resource)
        :build-fn build-array-texture
        :user-data {:node-id node-id
-                   :page-resources tpinfo-page-resources ; the page images: page-0.png, page-1.png etc
-                   :texture-profile-pb texture-profile-pb          ; for easy digest
+                   :page-resources tpinfo-page-resources    ; the page images: page-0.png, page-1.png etc
+                   :texture-profile-pb texture-profile-pb   ; for easy digest
                    :digest-ignored/texture-profile texture-profile ; for passing to the java build function
                    :texture-page-count texture-page-count
                    :paged-atlas paged-atlas}})))
@@ -1077,7 +1077,7 @@
 
   (input animations Animation :array)
   (output name-to-image-map g/Any :cached produce-name-to-image-map)
-  (output image-names g/Any :cached produce-image-names) ; These are a list of renamed source image names
+  (output image-names g/Any :cached produce-image-names)    ; These are a list of renamed source image names
 
   (output frame-ids g/Any :cached (g/fnk [tpinfo-frame-ids rename-patterns] (map (fn [id] (rename-id id rename-patterns)) tpinfo-frame-ids)))
 
@@ -1163,7 +1163,7 @@
   (run [app-view selection] (add-animation-group-handler app-view (selection->atlas selection))))
 
 
-(defn- add-images-handler [app-view parent] ; parent = new parent of images
+(defn- add-images-handler [app-view parent]                 ; parent = new parent of images
   (let [frame-ids (g/node-value parent :frame-ids)
         frame-id-items (map (fn [t] {:text t}) frame-ids)]
     (when-some [items (seq (dialogs/make-select-list-dialog frame-id-items
