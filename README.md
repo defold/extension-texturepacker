@@ -1,7 +1,9 @@
-[![Actions Status Alpha](https://github.com/defold/extension-rive/actions/workflows/bob.yml/badge.svg)](https://github.com/defold/extension-rive/actions)
+[![Actions Status Alpha](https://github.com/defold/extension-texturepacker/actions/workflows/bob.yml/badge.svg)](https://github.com/defold/extension-texturepacker/actions)
 
-# Rive animations for Defold
+![Texture Packer Export Folder](./docs/example1.png)
 
-Defold [native extension](https://www.defold.com/manuals/extensions/) for interacting with Rive animations.
+# Texture Packer Atlas support for Defold
 
-[Manual, API and setup instructions](https://www.defold.com/extension-rive/) is available on the official Defold site.
+Defold [native extension](https://www.defold.com/manuals/extensions/) for using packed atlases
+
+[Manual, API and setup instructions](https://www.defold.com/extension-texturepacker/) is available on the official Defold site, or [here](./docs/index.md)
