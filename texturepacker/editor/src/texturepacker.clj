@@ -913,7 +913,7 @@
 (defn make-array-texture-build-target
   [workspace node-id paged-atlas texture-page-count tpinfo-page-resources tpinfo-page-resources-sha1 texture-profile]
   (let [texture-type (workspace/get-resource-type workspace "texture")
-        texture-profile-pb (protobuf/pb->map texture-profile)
+        texture-profile-pb (when texture-profile (protobuf/pb->map texture-profile))
         texture-hash (digestable/sha1-hash
                        {:pages-sha1 tpinfo-page-resources-sha1
                         :texture-profile texture-profile-pb
