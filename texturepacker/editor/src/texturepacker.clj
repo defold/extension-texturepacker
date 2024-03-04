@@ -35,6 +35,7 @@
             [editor.scene-picking :as scene-picking]
             [editor.texture-set :as texture-set]
             [editor.types :as types]
+            [editor.util :as util]
             [editor.validation :as validation]
             [editor.workspace :as workspace]
             [schema.core :as s]
@@ -260,14 +261,14 @@
   (property tpinfo g/Any (dynamic visible (g/constantly false)))
   (property atlas g/Any (dynamic visible (g/constantly false)))
   (property frame-ids g/Any (dynamic visible (g/constantly false)))
-
   (property pages g/Any (dynamic visible (g/constantly false))) ; type: TextureSetLayout.Page
   (property layouts g/Any (dynamic visible (g/constantly false))) ; type: TextureSetLayout.Layout
   (property animations g/Any (dynamic visible (g/constantly false)))
   (property page-names g/Any (dynamic visible (g/constantly false)))
-
   (property width g/Num (dynamic visible (g/constantly false)))
   (property height g/Num (dynamic visible (g/constantly false)))
+  (property page-resources g/Any (dynamic visible (g/constantly false)))
+
   (property size types/Vec2
             (value (g/fnk [width height] [width height]))
             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
@@ -280,8 +281,6 @@
   (property description g/Str
             (value (g/fnk [tpinfo] (:description tpinfo)))
             (dynamic read-only? (g/constantly true)))
-
-  (property page-resources g/Any (dynamic visible (g/constantly false)))
 
   (input texture-profiles g/Any)
 
@@ -324,10 +323,10 @@
                                              {:node-id _node-id
                                               :node-outline-key path
                                               :label path
-                                              :icon animation-icon
+                                              :icon tpinfo-icon
+                                              :read-only true
                                               :outline-error? (g/error-fatal? build-errors)
-                                              :children child-outlines
-                                              :read-only true})))
+                                              :children child-outlines})))
 
 (defn- render-image-geometry [^GL2 gl vertices offset-x color]
   (let [[cr cg cb ca] color]
@@ -377,10 +376,10 @@
 
 (defn- get-scene-from-image [name-to-image-map name]
   (let [image-node (get name-to-image-map name) ;  get the source image
-        scene (g/node-value image-node :scene)]
+        scene (g/node-value image-node :scene)] ;; TODO: This use of g/node-value bypasses the dependency invalidation system. Put scenes in name-to-image-map?
     scene))
 
-(defn- produce-scene-from-image [_node-id image image-order page animation-updatable]
+(defn- make-scene-from-image [_node-id image image-order page animation-updatable]
   (let [size (.size page)
         page-width (.width size)
         page-height (.height size)
@@ -415,7 +414,7 @@
 (g/defnk produce-image-scene [_node-id name name-to-image-map image image-order page animation-updatable]
   (let [scene (if (nil? page)
                 (get-scene-from-image name-to-image-map name)
-                (produce-scene-from-image _node-id image image-order page animation-updatable))]
+                (make-scene-from-image _node-id image image-order page animation-updatable))]
     (assoc scene :node-id _node-id)))
 
 (defn- rename-id [id rename-patterns]
@@ -446,11 +445,14 @@
   (property image g/Any (dynamic visible (g/constantly false)))
 
   (property size types/Vec2
-            (value (g/fnk [image] (let [rect (:rect image)
-                                        width (:width rect)
-                                        height (:height rect)]
-                                    [width height])))
+            (value (g/fnk [image]
+                     (when image
+                       (let [rect (:rect image)
+                             width (:width rect)
+                             height (:height rect)]
+                         [width height]))))
             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
+            (dynamic visible (g/fnk [is-animation-child] (not is-animation-child)))
             (dynamic read-only? (g/constantly true)))
 
   (input page g/Any)
@@ -463,6 +465,8 @@
 
   (input child->order g/Any)
 
+  (output is-animation-child g/Bool (g/fnk [child->order] (some? child->order)))
+
   ;; The order of this image within the list of images in the actual .tpinfo file
   (output image-order g/Any (g/fnk [original-name ^List image-names] (.indexOf image-names original-name)))
 
@@ -473,13 +477,13 @@
 
   (output scene g/Any produce-image-scene)
 
-  (output node-outline outline/OutlineData (g/fnk [_node-id name build-errors]
+  (output node-outline outline/OutlineData (g/fnk [_node-id is-animation-child name build-errors]
                                              {:node-id _node-id
                                               :node-outline-key name
                                               :label name
                                               :icon image-icon
-                                              :outline-error? (g/error-fatal? build-errors)
-                                              :read-only true}))
+                                              :read-only (not is-animation-child)
+                                              :outline-error? (g/error-fatal? build-errors)}))
 
   (output build-errors g/Any (g/fnk [_node-id name image-names]
                                (g/package-errors _node-id (validate-name _node-id name image-names)))))
@@ -521,10 +525,10 @@
                                              {:node-id _node-id
                                               :node-outline-key name
                                               :label label
-                                              :icon tpinfo-icon
-                                              :children child-outlines
+                                              :icon tpatlas-icon
+                                              :read-only true
                                               :outline-error? (g/error-fatal? own-build-errors)
-                                              :read-only true})))
+                                              :children child-outlines})))
 
 (defn convert-source-image-to-map [image page-height]
   (let [out (dissoc (bean image) :class)
@@ -623,6 +627,7 @@
 
 ;; Attaches an AtlasAnimationImage node to an AtlasAnimation node
 (defn- attach-image-to-animation [animation-node image-node]
+  ;; TODO: This seems like an excessive number of connections? Surely some of this doesn't need to travel across the individual atlas animation images?
   (concat
     (g/connect image-node :_node-id animation-node :nodes)
     (g/connect image-node :build-errors animation-node :child-build-errors)
@@ -637,6 +642,7 @@
 
 ;; Attaches an AtlasAnimation to a TPAtlasNode
 (defn- attach-animation-to-atlas [atlas-node animation-node]
+  ;; TODO: This seems like an excessive number of connections? Surely some of this doesn't need to travel across the individual atlas animations?
   (concat
     (g/connect animation-node :_node-id atlas-node :nodes)
     (g/connect animation-node :animation atlas-node :animations)
@@ -761,11 +767,11 @@
             {:node-id _node-id
              :node-outline-key id
              :label id
-             :children (sort-by :order child-outlines)
              :icon animation-icon
              :outline-error? (g/error-fatal? own-build-errors)
              :child-reqs [{:node-type AtlasAnimationImage
-                           :tx-attach-fn attach-image-to-animation}]}))
+                           :tx-attach-fn attach-image-to-animation}]
+             :children (sort-by :order child-outlines)}))
 
   (input img-ddf g/Any :array)
   (output ddf-message g/Any :cached produce-anim-ddf)
@@ -804,7 +810,6 @@
 ;; .tpatlas file
 (defn load-tpatlas-file [project self resource tpatlas]
   (let [tpinfo-resource (workspace/resolve-resource resource (:file tpatlas))
-        animations (map (partial update-int->bool [:flip-horizontal :flip-vertical]) (:animations tpatlas))
         tx-data (concat
                   (g/connect project :build-settings self :build-settings)
                   (g/connect project :texture-profiles self :texture-profiles)
@@ -813,17 +818,20 @@
                     :tpatlas tpatlas
                     :rename-patterns (:rename-patterns tpatlas)
                     :is-paged-atlas (:is-paged-atlas tpatlas))
-                  (map (fn [animation] (make-atlas-animation self animation)) animations))]
+                  (mapv (fn [animation]
+                          (->> animation
+                               (update-int->bool [:flip-horizontal :flip-vertical])
+                               (make-atlas-animation self)))
+                        (:animations tpatlas)))]
     tx-data))
 
 
 ;; saving the .tpatlas file
 (g/defnk produce-tpatlas-save-value [file anim-ddf rename-patterns is-paged-atlas]
-  (cond-> {:file (resource/resource->proj-path file)
-           :rename-patterns rename-patterns
-           :is-paged-atlas is-paged-atlas
-           :animations anim-ddf
-           }))
+  {:file (resource/resource->proj-path file)
+   :rename-patterns rename-patterns
+   :is-paged-atlas is-paged-atlas
+   :animations anim-ddf})
 
 (defn- validate-rename-patterns [node-id rename-patterns]
   (try
@@ -1048,11 +1056,11 @@
                                                      {:node-id _node-id
                                                       :node-outline-key "Atlas"
                                                       :label "Atlas"
+                                                      :icon tpatlas-icon
                                                       :outline-error? (g/error-fatal? own-build-errors)
                                                       :children (concat
                                                                   (make-tpinfo-node-outline-copies rename-patterns tpinfo-node-outline)
-                                                                  child-outlines)
-                                                      :icon tpatlas-icon}))
+                                                                  child-outlines)}))
 
   (output tpinfo-page-resources-sha1 g/Any :cached produce-tpinfo-page-resources-sha1)
 
@@ -1094,42 +1102,38 @@
   (run [app-view selection] (add-animation-group-handler app-view (selection->atlas selection))))
 
 
-(defn- add-images-handler [app-view parent] ; parent = new parent of images
-  (let [frame-ids (g/node-value parent :frame-ids)
-        frame-id-items (map (fn [t] {:text t}) frame-ids)]
-    (when-some [items (seq (dialogs/make-select-list-dialog frame-id-items
-                                                            (:title "Select frames")))]
+(defn- add-images-handler [app-view animation-node]
+  {:pre [(g/node-instance? AtlasAnimation animation-node)]}
+  (let [frame-ids (sort util/natural-order
+                        (g/node-value animation-node :frame-ids))
+        frame-id-items (mapv (fn [frame-id]
+                               {:text frame-id})
+                             frame-ids)]
+    (when-some [items (not-empty
+                        (dialogs/make-select-list-dialog
+                          frame-id-items
+                          {:title "Select Animation Frames"
+                           :selection :multiple
+                           :ok-label "Add Animation Frames"}))]
       (let [op-seq (gensym)
-            image-text (:text (first items))
-
+            image-names (mapv :text items)
             image-nodes (g/tx-nodes-added
                           (g/transact
                             (concat
                               (g/operation-sequence op-seq)
                               (g/operation-label "Add Images")
-                              (cond
-                                ;; Since the atlas is currently fixed, we only allow adding images to the AtlasAnimation
-                                (g/node-instance? AtlasAnimation parent)
-                                (make-image-nodes-in-animation parent [image-text])
-
-                                :else
-                                (let [parent-node-type @(g/node-type* parent)]
-                                  (throw (ex-info (str "Unsupported parent type " (:name parent-node-type))
-                                                  {:parent-node-type parent-node-type})))))))]
+                              (make-image-nodes-in-animation animation-node image-names))))]
         (g/transact
           (concat
             (g/operation-sequence op-seq)
             (app-view/select app-view image-nodes)))))))
 
 (handler/defhandler :add-from-file :workbench
-  (label [] "Add Images...")
+  (label [] "Add Animation Frames...")
   (active? [selection] (selection->animation selection))
   (run [app-view project selection workspace]
-       (let [atlas (selection->atlas selection)]
-         (when-some [parent-node (or atlas (selection->animation selection))]
-           (let [accept-fn (when atlas
-                             (constantly true))]
-             (add-images-handler app-view workspace project parent-node accept-fn))))))
+       (when-some [animation-node (selection->animation selection)]
+         (add-images-handler app-view animation-node))))
 
 (defn- vec-move
   [v x offset]
@@ -1192,6 +1196,7 @@
       :load-fn load-tpinfo-file
       :icon tpinfo-icon
       :ddf-type tp-plugin-tpinfo-cls
+      :auto-connect-save-data? false
       :view-types [:scene :text]
       :view-opts {:scene {:grid true}})
     (resource-node/register-ddf-resource-type workspace
@@ -1217,3 +1222,17 @@
   (fn [x] (load-plugin-texturepacker x)))
 
 (return-plugin)
+
+
+;; TODO:
+;; * Removing a .png file from disk should result in a build error from TPInfoNode.
+;;     * Source images should be editor.image.ImageNodes connected to the TPInfoNode.
+;; * Convert PB to map and get rid of java access to Protobuf data in TPInfoNode?
+;; * Sort the images? Hmm. We don't do this for regular atlases.
+
+;; DONE:
+;; * Fix exception when dragging frames between animations in Outline.
+;; * Fix exception when adding animation frames.
+;; * Add the ability to add multiple animation frames at once.
+;; * Add the ability to remove selected frames from an animation.
+;; * Fix icons in TPInfoNode node-outline.
