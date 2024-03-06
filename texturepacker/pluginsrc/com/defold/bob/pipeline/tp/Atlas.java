@@ -90,11 +90,18 @@ public class Atlas {
         return atlas;
     }
 
+    // Used from editor
+    static public TextureSetLayout.Page createLayoutPage(int index, Info.Page tpinfoPage) {
+        return AtlasBuilder.createPage(index, tpinfoPage);
+    }
+
+    // Not used from editor. Safe to remove?
     static public Atlas createAtlas(String path, byte[] data) throws IOException {
         Info.Atlas atlasIn = Info.Atlas.newBuilder().mergeFrom(data).build();
         return createAtlasInternal(path, null, atlasIn);
     }
 
+    // Used from editor
     static public Atlas createFullAtlas(String path, byte[] data_tpatlas, byte[] data_tpinfo) throws IOException {
         AtlasDesc.Builder tpatlasBuilder = AtlasDesc.newBuilder().mergeFrom(data_tpatlas);
         Info.Atlas tpinfo = Info.Atlas.newBuilder().mergeFrom(data_tpinfo).build();
@@ -122,7 +129,7 @@ public class Atlas {
     }
 
     // Used from editor
-    static public TextureImage createTexture(String path, Boolean isPaged, BufferedImage[] textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
+    static public TextureImage createTexture(String path, boolean isPaged, BufferedImage[] textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
         TextureImage.Type textureImageType = isPaged ? TextureImage.Type.TYPE_2D_ARRAY : TextureImage.Type.TYPE_2D;
 
         boolean compress = textureProfile != null;
