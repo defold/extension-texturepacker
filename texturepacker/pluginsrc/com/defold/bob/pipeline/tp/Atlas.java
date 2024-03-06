@@ -129,11 +129,9 @@ public class Atlas {
     }
 
     // Used from editor
-    static public TextureImage createTexture(String path, boolean isPaged, BufferedImage[] textureImages, TextureProfile textureProfile) throws TextureGeneratorException {
+    static public TextureImage createTexture(String path, boolean isPaged, List<BufferedImage> textureImages, TextureProfile textureProfile, boolean compress) throws TextureGeneratorException {
         TextureImage.Type textureImageType = isPaged ? TextureImage.Type.TYPE_2D_ARRAY : TextureImage.Type.TYPE_2D;
-
-        boolean compress = textureProfile != null;
-        return TextureUtil.createMultiPageTexture(Arrays.asList(textureImages), textureImageType, textureProfile, compress);
+        return TextureUtil.createMultiPageTexture(textureImages, textureImageType, textureProfile, compress);
     }
 
     // Used from editor
