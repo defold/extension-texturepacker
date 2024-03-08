@@ -256,11 +256,11 @@
      :children (into child-renderables
                      child-scenes)}))
 
-(g/defnk produce-tpatlas-scene [_node-id size atlas texture-profile tpinfo-scene child-scenes]
+(g/defnk produce-tpatlas-scene [_node-id size texture-profile tpinfo tpinfo-scene child-scenes]
   (let [[width height] size]
     (if (nil? tpinfo-scene)
       {:info-text (format "Atlas: 0 pages 0 x 0")}
-      {:info-text (format "Atlas: %d pages %d x %d (%s profile)" (count (.pages atlas)) (int width) (int height) (:name texture-profile "no"))
+      {:info-text (format "Atlas: %d pages %d x %d (%s profile)" (count (:pages tpinfo)) (int width) (int height) (:name texture-profile "no"))
        :children (into [tpinfo-scene] child-scenes)})))
 
 (g/defnk produce-tpinfo-save-value [page-image-names tpinfo]
@@ -979,12 +979,6 @@
         names (map (fn [id] (rename-id (g/node-value id :name) rename-patterns)) node-ids)]
     names))
 
-(g/defnk produce-full-atlas [resource save-value tpinfo]
-  (let [path (resource/path resource)
-        tpatlas-bytes (protobuf/map->bytes tpatlas-pb-cls save-value)
-        tpinfo-bytes (protobuf/map->bytes tpinfo-pb-cls tpinfo)]
-    (plugin-create-full-atlas path tpatlas-bytes tpinfo-bytes)))
-
 (defn- modify-outline [rename-patterns outline]
   (let [modified (assoc outline :label (rename-id (:node-outline-key outline) rename-patterns))]
     modified))
@@ -1063,10 +1057,15 @@
 
   (output frame-ids g/Any :cached (g/fnk [tpinfo-frame-ids rename-patterns] (map (fn [id] (rename-id id rename-patterns)) tpinfo-frame-ids)))
 
-  (output atlas g/Any :cached produce-full-atlas) ; type Atlas from Atlas.java
-
-  (output texture-set-result g/Any :cached (g/fnk [resource atlas]
-                                             (plugin-create-texture-set-result (resource/path resource) atlas "")))
+  (output texture-set-result g/Any :cached
+          ;; TODO: This is not fully configured. Rename to preview-texture-set-result or texture-set+uv-transforms?
+          (g/fnk [_node-id resource save-value tpinfo tpinfo-file-resource]
+            (or (validate-tpinfo-file _node-id tpinfo-file-resource)
+                (let [path (resource/path resource)
+                      tpatlas-bytes (protobuf/map->bytes tpatlas-pb-cls save-value)
+                      tpinfo-bytes (protobuf/map->bytes tpinfo-pb-cls tpinfo)
+                      atlas (plugin-create-full-atlas path tpatlas-bytes tpinfo-bytes)]
+                  (plugin-create-texture-set-result path atlas "")))))
 
   (output uv-transforms g/Any (g/fnk [texture-set-result] (.right texture-set-result)))
   (output texture-set g/Any (g/fnk [texture-set-result] (.left texture-set-result)))
@@ -1107,8 +1106,9 @@
   (output updatable g/Any (g/fnk [] nil))
   (output scene g/Any :cached produce-tpatlas-scene)
 
-  (output own-build-errors g/Any (g/fnk [_node-id rename-patterns]
+  (output own-build-errors g/Any (g/fnk [_node-id file rename-patterns]
                                    (g/package-errors _node-id
+                                                     (validate-tpinfo-file _node-id file)
                                                      (validate-rename-patterns _node-id rename-patterns))))
 
   (output build-errors g/Any (g/fnk [_node-id tpinfo-build-errors child-build-errors own-build-errors]
@@ -1265,17 +1265,18 @@
 
 
 ;; TODO:
-;; * Convert PB to map and get rid of java access to Protobuf data in TPInfoNode?
 ;; * Sort the images? Hmm. We don't do this for regular atlases.
-;; * Decide what to match the texture profile against.
 
 ;; DONE:
+;; * Fix exception when clearing the `.tpinfo` File property in a `.tpatlas` with animations.
 ;; * Fix exception when dragging frames between animations in Outline.
 ;; * Fix exception when adding animation frames.
 ;; * Add the ability to add multiple animation frames at once.
 ;; * Add the ability to remove selected frames from an animation.
-;; * Fix icons in TPInfoNode node-outline.
-;; * The built texture now respects non-compression settings (such as mipmap) of the matched texture profile.
-;; * Removing a .png file from disk now results in a build error.
+;; * Fix Outline panel icons for `.tpinfo` resources.
+;; * The built texture now respects non-compression settings (such as mipmap) of the texture profile matched by the `.tpatlas` file.
+;; * Removing a .png file from disk now results in a build error and on the Image property field.
+;; * The Page Image resource field is now editable so users can patch up invalid page image references.
 ;; * Edits to a .png file from an external application now show up in scene views and the build output.
 ;; * Renaming a .png file now updates references in the `.tpinfo` file and the build output.
+;; * Refactoring: Use map representation of `.tpinfo` instead of Protobuf Message object.
