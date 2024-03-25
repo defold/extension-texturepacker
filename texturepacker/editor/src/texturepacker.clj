@@ -582,9 +582,12 @@
   (inherits outline/OutlineNode)
 
   (property original-name OriginalName
-            ;; TODO: Allow editing for animation images. Pick from .tpinfo image names in dropdown.
             (dynamic label (g/constantly "Image"))
-            (dynamic visible (g/constantly false))
+            (dynamic read-only? (g/fnk [_node-id]
+                                  (g/node-instance? AtlasPageNode
+                                                    (g/node-feeding-into _node-id :tpinfo-image-infos-by-original-name))))
+            (dynamic edit-type (g/fnk [tpinfo-image-infos-by-original-name]
+                                 (properties/->choicebox (keys tpinfo-image-infos-by-original-name))))
             (dynamic error (g/fnk [_node-id original-name tpinfo-image-infos-by-original-name]
                              (validate-original-name _node-id original-name tpinfo-image-infos-by-original-name))))
 
