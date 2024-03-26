@@ -42,7 +42,7 @@
             [util.coll :refer [pair]]
             [util.digestable :as digestable])
   (:import [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
-           [com.dynamo.bob.textureset TextureSetLayout$Page TextureSetLayout$Rectangle TextureSetLayout$SourceImage]
+           [com.dynamo.bob.textureset TextureSetLayout$Page TextureSetLayout$SourceImage]
            [com.dynamo.gamesys.proto Tile$Playback]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
            [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
@@ -56,22 +56,28 @@
            [java.util List]
            [javax.vecmath Matrix4d Point3d Vector3d]))
 
-(def tpinfo-icon "/texturepacker/editor/resources/icons/32/icon-tpinfo.png")
-(def tpatlas-icon "/texturepacker/editor/resources/icons/32/icon-tpatlas.png")
-(def animation-icon "/texturepacker/editor/resources/icons/32/icon-animation.png")
-(def image-icon "/texturepacker/editor/resources/icons/32/icon-image.png")
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
 
-(def tpinfo-file-ext "tpinfo")
-(def tpatlas-file-ext "tpatlas")
+(def ^:private tpinfo-icon "/texturepacker/editor/resources/icons/32/icon-tpinfo.png")
+(def ^:private tpatlas-icon "/texturepacker/editor/resources/icons/32/icon-tpatlas.png")
+(def ^:private animation-icon "/texturepacker/editor/resources/icons/32/icon-animation.png")
+(def ^:private image-icon "/texturepacker/editor/resources/icons/32/icon-image.png")
+
+(def ^:private tpinfo-resource-label "Texture Packer Export File")
+(def ^:private tpatlas-resource-label "Texture Packer Atlas")
+
+(def ^:private tpinfo-file-ext "tpinfo")
+(def ^:private tpatlas-file-ext "tpatlas")
 
 ;; Plugin functions (from Atlas.java)
 
-(def tpinfo-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Atlas"))
-(def tpinfo-page-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Page"))
-(def tpatlas-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Atlas$AtlasDesc"))
-(def tp-plugin-cls (workspace/load-class! "com.dynamo.bob.pipeline.tp.Atlas"))
+(def ^:private tpinfo-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Atlas"))
+(def ^:private tpinfo-page-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Page"))
+(def ^:private tpatlas-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Atlas$AtlasDesc"))
+(def ^:private tp-plugin-cls (workspace/load-class! "com.dynamo.bob.pipeline.tp.Atlas"))
 
-(def byte-array-cls (Class/forName "[B"))
+(def ^:private byte-array-cls (Class/forName "[B"))
 
 (defn- debug-cls [^Class cls]
   (doseq [^Method m (.getMethods cls)]
@@ -125,10 +131,10 @@
                         [String Boolean/TYPE List Graphics$TextureProfile Boolean/TYPE]
                         [path is-paged buffered-images texture-profile-pb compress]))
 
-(defn- plugin-source-image-get-vertices
+(defn- plugin-source-image-triangle-vertices
   "Returns a float array (2-tuples) that is a triangle list:
   [t0.x0, t0.y0, t0.x1, t0.y1, t0.x2, t0.y2, t1.x0, t1.y0, ...]."
-  [^TextureSetLayout$SourceImage source-image page-height]
+  ^floats [^TextureSetLayout$SourceImage source-image page-height]
   (plugin-invoke-static tp-plugin-cls "getTriangles"
                         [TextureSetLayout$SourceImage Float]
                         [source-image page-height]))
@@ -178,17 +184,14 @@
    :untrimmed-size TSize
    :vertex-count s/Int})
 
-(g/deftype ^:private FinalName TFinalName)
 (g/deftype ^:private FinalNameCounts {TFinalName s/Int})
 (g/deftype ^:private ImageInfo TImageInfo)
 (g/deftype ^:private LayoutPageVec [TextureSetLayout$Page])
 (g/deftype ^:private NodeID+OriginalName TNodeID+OriginalName)
-(g/deftype ^:private OriginalName TOriginalName)
 (g/deftype ^:private OriginalName->ImageInfo {TOriginalName TImageInfo})
 (g/deftype ^:private OriginalName->Scene {TOriginalName TScene})
 (g/deftype ^:private PageImageName TPageImageName)
 (g/deftype ^:private PageInfo TPageInfo)
-(g/deftype ^:private RenamePatterns s/Str)
 (g/deftype ^:private Scene TScene)
 (g/deftype ^:private SceneUpdatable TSceneUpdatable)
 (g/deftype ^:private SceneVec [TScene])
@@ -240,7 +243,7 @@
   (defn void main []
     (setq gl_FragColor (texture2DArray texture_sampler (vec3 var_texcoord0 var_page_index)))))
 
-(def atlas-shader
+(def ^:private atlas-shader
   (let [transformed-shader-result (ShaderUtil$VariantTextureArrayFallback/transform pos-uv-frag ShaderUtil$Common/MAX_ARRAY_SAMPLERS)
         augmented-fragment-source (.source transformed-shader-result)
         uniforms {"world_view_proj_matrix" :world-view-proj}
@@ -349,41 +352,19 @@
           {:min-filter gl/nearest
            :mag-filter gl/nearest})))))
 
-(defn- layout-rectangle->map [^TextureSetLayout$Rectangle layout-rectangle]
-  {:x (.x layout-rectangle)
-   :y (.y layout-rectangle)
-   :width (.width layout-rectangle)
-   :height (.height layout-rectangle)})
-
-(defn- make-editor-rect [path page-height {:keys [x y width height] :as _layout-rectangle-map}]
-  ;; Flips the y -> page-height - y.
-  (types/->Rect path x (- page-height y height) width height))
-
-(defn- source-image->map [^TextureSetLayout$SourceImage source-image page-height]
-  ;; TODO: We don't need most of this stuff.
-  {:name (.name source-image)
-   :original-size (some-> (.originalSize source-image) layout-rectangle->map)
-   :rect (layout-rectangle->map (.rect source-image))
-   :rotated (boolean (.rotated source-image))
-   :vertices (into [] ; vertices is an array of floats (2-tuples) describing a triangle list (every 3 vertices form a triangle)
-                   (partition-all 2)
-                   (plugin-source-image-get-vertices source-image page-height))
-   :indices (into (vector-of :int)
-                  (.indices source-image))})
-
-(defn- render-image-geometry [^GL2 gl vertices color]
+(defn- render-image-geometry [^GL2 gl world-positions color]
   (let [[^double cr ^double cg ^double cb ^double ca] color]
     (.glColor4d gl cr cg cb ca)
     (.glBegin gl GL2/GL_TRIANGLES)
-    (doseq [[^double x ^double y] vertices]
-      (.glVertex3d gl x y 0.0))
+    (doseq [[^double x ^double y ^double z] world-positions]
+      (.glVertex3d gl x y z))
     (.glEnd gl)))
 
 (defn- render-image-outline
   [^GL2 gl renderable override-color]
-  (let [vertices (-> renderable :user-data :vertices)
+  (let [world-positions (-> renderable :user-data :world-positions)
         color (or override-color (colors/renderable-outline-color renderable))]
-    (render-image-geometry gl vertices color)))
+    (render-image-geometry gl world-positions color)))
 
 (defn- render-image-outlines
   [^GL2 gl render-args renderables _renderable-count]
@@ -416,40 +397,55 @@
   (let [renderable (first renderables)
         picking-id (:picking-id renderable)
         id-color (scene-picking/picking-id->color picking-id)
-        vertices (-> renderable :user-data :vertices)]
-    (render-image-geometry gl vertices id-color)))
+        world-positions (-> renderable :user-data :world-positions)]
+    (render-image-geometry gl world-positions id-color)))
 
-(defn- transf-p2
-  [^Matrix4d m4d ps]
-  (let [p (Point3d.)]
-    (mapv (fn [[^double x ^double y]]
-            (.set p x y 0.0)
-            (.transform m4d p)
-            (vector-of :double (.x p) (.y p) 0.0))
-          ps)))
+(defn- point->vec3 [^Point3d point]
+  (vector-of :double (.x point) (.y point) (.z point)))
 
-(defn- make-image-scene [image-node-id source-image-map ^TextureSetLayout$Page layout-page page-offset-transforms]
-  ;; TODO: Simplify aabb creation.
-  (let [size (.size layout-page)
-        page-height (.height size)
-        editor-rect (make-editor-rect name page-height (:rect source-image-map))
-        aabb (geom/rect->aabb editor-rect)
+(defn- make-image-scene [image-node-id ^TextureSetLayout$SourceImage source-image ^TextureSetLayout$Page layout-page page-offset-transforms]
+  (let [page-size (.size layout-page)
+        page-height (.height page-size)
         page-index (.index layout-page)
-        page-offset-transform (page-offset-transforms page-index)
-        vertices (transf-p2 page-offset-transform (:vertices source-image-map))]
+        ^Matrix4d page-offset-transform (page-offset-transforms page-index)
+        interleaved-xys (plugin-source-image-triangle-vertices source-image page-height)
+
+        ;; We calculate the AABB from the vertex positions because the rect of
+        ;; the SourceImage includes the empty space that was around the image
+        ;; before it was trimmed away and composed into an atlas. For our
+        ;; purposes, we want the AABB to encompass the vertices of the trimmed
+        ;; hull, so that it can be framed and box-selected in the scene view.
+        [world-aabb world-positions]
+        (let [length (alength interleaved-xys)
+              point (Point3d.)]
+          (loop [index 0
+                 world-aabb geom/null-aabb
+                 world-positions (transient [])]
+            (if (< index length)
+              (let [x (aget interleaved-xys index)
+                    y (aget interleaved-xys (inc index))]
+                (.set point x y 0.0)
+                (.transform page-offset-transform point)
+                (recur (+ index 2)
+                       (geom/aabb-incorporate world-aabb point)
+                       (conj! world-positions (point->vec3 point))))
+              (pair world-aabb (persistent! world-positions)))))]
+
+    ;; The scenes are not parented to the transformed atlas pages. Instead, they
+    ;; are expressed in world-space so that they can be used as immediate child
+    ;; scenes to the untransformed TPInfoNode or AtlasAnimationNode scenes.
     {:node-id image-node-id
-     :transform page-offset-transform
-     :aabb aabb
+     :aabb world-aabb
      :renderable {:render-fn render-image-outlines
                   :tags #{:atlas :outline}
                   :batch-key ::atlas-image-outline
-                  :user-data {:vertices vertices}
+                  :user-data {:world-positions world-positions}
                   :passes [pass/outline]}
-     :children [{:aabb aabb
+     :children [{:aabb world-aabb
                  :node-id image-node-id
                  :renderable {:render-fn render-image-selection
                               :tags #{:atlas}
-                              :user-data {:vertices vertices}
+                              :user-data {:world-positions world-positions}
                               :passes [pass/selection]}}]}))
 
 (g/defnode TPInfoNode
@@ -522,15 +518,12 @@
               (into {}
                     (mapcat
                       (fn [^TextureSetLayout$Page layout-page]
-                        (let [layout-size (.size layout-page)
-                              page-height (.height layout-size)]
-                          (map (fn [^TextureSetLayout$SourceImage source-image]
-                                 (let [original-name (.name source-image)
-                                       image-node-id (original-name->image-node-id original-name)
-                                       source-image-map (source-image->map source-image page-height)
-                                       scene (make-image-scene image-node-id source-image-map layout-page page-offset-transforms)]
-                                   (pair original-name scene)))
-                               (.images layout-page)))))
+                        (map (fn [^TextureSetLayout$SourceImage source-image]
+                               (let [original-name (.name source-image)
+                                     image-node-id (original-name->image-node-id original-name)
+                                     scene (make-image-scene image-node-id source-image layout-page page-offset-transforms)]
+                                 (pair original-name scene)))
+                             (.images layout-page))))
                     layout-pages))))
 
   (output parent-dir-file File :cached
@@ -553,16 +546,14 @@
                               page-build-errors)))
 
   (output node-outline outline/OutlineData :cached
-          (g/fnk [_node-id child-outlines build-errors resource]
-            ;; TODO: Should this really use the path as the label?
-            (let [path (resource/path resource)]
-              {:node-id _node-id
-               :node-outline-key path
-               :label path
-               :icon tpinfo-icon
-               :read-only true
-               :outline-error? (g/error-fatal? build-errors)
-               :children child-outlines})))
+          (g/fnk [_node-id child-outlines build-errors]
+            {:node-id _node-id
+             :node-outline-key tpinfo-resource-label
+             :label tpinfo-resource-label
+             :icon tpinfo-icon
+             :read-only true
+             :outline-error? (g/error-fatal? build-errors)
+             :children child-outlines}))
 
   (output save-value g/Any :cached produce-tpinfo-save-value))
 
@@ -578,14 +569,27 @@
 (defn- validate-original-name [node-id original-name tpinfo-image-infos-by-original-name]
   (validation/prop-error :fatal node-id :original-name original-name-missing-in-tpinfo? original-name tpinfo-image-infos-by-original-name))
 
+(declare AtlasPageNode)
+
+(defn- image-owned-by-tpinfo? [image-node-id]
+  (g/node-instance? AtlasPageNode
+                    (g/node-feeding-into image-node-id
+                                         :tpinfo-image-infos-by-original-name)))
+
 (g/defnode AtlasImageNode
   (inherits outline/OutlineNode)
 
-  (property original-name OriginalName
+  ;; The original-name is the only information in the AtlasImageNode. It is used
+  ;; to look up the ImageInfo associated with this image in the `.tpinfo` file.
+  ;; The `.tpinfo` file is always the source of truth, we just present
+  ;; information from it. This way, an AtlasImageNode can be copied from a
+  ;; TPInfoNode to an AtlasAnimationNode, moved between AtlasAnimationNodes, or
+  ;; edited to address a different image in the `.tpinfo` file, while always
+  ;; presenting up-to-date information from the `.tpinfo` file.
+  (property original-name g/Str
             (dynamic label (g/constantly "Image"))
             (dynamic read-only? (g/fnk [_node-id]
-                                  (g/node-instance? AtlasPageNode
-                                                    (g/node-feeding-into _node-id :tpinfo-image-infos-by-original-name))))
+                                  (image-owned-by-tpinfo? _node-id)))
             (dynamic edit-type (g/fnk [tpinfo-image-infos-by-original-name]
                                  (properties/->choicebox (keys tpinfo-image-infos-by-original-name))))
             (dynamic error (g/fnk [_node-id original-name tpinfo-image-infos-by-original-name]
@@ -631,13 +635,6 @@
 
   (property layout-page TextureSetLayout$Page (dynamic visible (g/constantly false)))
 
-  (property size types/Vec2
-            (value (g/fnk [^TextureSetLayout$Page layout-page]
-                     (let [layout-size (.size layout-page)]
-                       [(.width layout-size) (.height layout-size)])))
-            (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
-            (dynamic read-only? (g/constantly true)))
-
   (property image resource/Resource
             (value (gu/passthrough image-resource))
             (set (fn [evaluation-context self old-value new-value]
@@ -646,6 +643,13 @@
                                             [:content-generator :image-content-generator])))
             (dynamic error (g/fnk [_node-id image-resource]
                              (validate-page-image _node-id image-resource))))
+
+  (property size types/Vec2
+            (value (g/fnk [^TextureSetLayout$Page layout-page]
+                     (let [layout-size (.size layout-page)]
+                       [(.width layout-size) (.height layout-size)])))
+            (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
+            (dynamic read-only? (g/constantly true)))
 
   (input image-node-id+original-names NodeID+OriginalName :array :cascade-delete)
   (input tpinfo-parent-dir-file File) ; Used to convert the page image resource proj-path into a page image file name relative to the `.tpinfo` file.
@@ -757,7 +761,6 @@
 
 ;; Attaches an AtlasAnimationNode to a TPAtlasNode
 (defn- attach-animation-to-atlas [atlas-node animation-node]
-  ;; TODO: This seems like an excessive number of connections? Surely some of this doesn't need to travel across the individual atlas animations?
   (concat
     (g/connect atlas-node :tpinfo-image-infos-by-original-name animation-node :tpinfo-image-infos-by-original-name)
     (g/connect atlas-node :tpinfo-image-scenes-by-original-name animation-node :tpinfo-image-scenes-by-original-name)
@@ -833,7 +836,7 @@
 (g/defnode AtlasAnimationNode
   (inherits outline/OutlineNode)
 
-  (property id FinalName
+  (property id g/Str
             (dynamic error (g/fnk [_node-id id id-counts] (validate-animation-id _node-id id id-counts))))
   (property fps g/Int
             (default 24)
@@ -849,7 +852,7 @@
   (input tpinfo-image-infos-by-original-name OriginalName->ImageInfo)
   (output tpinfo-image-infos-by-original-name OriginalName->ImageInfo (gu/passthrough tpinfo-image-infos-by-original-name))
 
-  (input rename-patterns RenamePatterns)
+  (input rename-patterns g/Str)
   (input id-counts FinalNameCounts) ; A map from final name to frequency (to detect duplicate names)
   (input anim-data g/Any)
   (input gpu-texture g/Any)
@@ -860,7 +863,9 @@
             ;; scenes so that animation images can be highlighted and selected.
             ;; The image scenes only include outlines and shapes for selection
             ;; picking. The actual "sprite sheet" page images are drawn from the
-            ;; tpinfo scene as quads.
+            ;; tpinfo scene as quads. The page offset transforms have been baked
+            ;; into the image scenes, so they can be used as children to either
+            ;; the TPInfoNode or AtlasAnimationNode scenes.
             (into []
                   (keep-indexed
                     (fn [frame [image-node-id original-name]]
@@ -876,7 +881,7 @@
           (g/fnk [image-node-id+original-names rename-patterns id-counts]
             (mapv (fn [[node-id original-name]]
                     (let [final-name (rename-id original-name rename-patterns)
-                          has-duplicate-name (> (id-counts final-name) 1)]
+                          has-duplicate-name (> (long (id-counts final-name)) 1)]
                       {:node-id node-id
                        :node-outline-key original-name
                        :label final-name
@@ -980,7 +985,7 @@
         (str "The following ids are not unique:\n"
              (string/join "\n" (map dialogs/indent-with-bullet duplicate-ids)))))
     (into (sorted-set)
-          (keep (fn [[id frequency]]
+          (keep (fn [[id ^long frequency]]
                   (when (> frequency 1)
                     id)))
           id-counts)))
@@ -1030,31 +1035,20 @@
           page-image-content-generators (vec tpinfo-page-image-content-generators)
           texture-build-target (make-texture-build-target workspace _node-id use-paged-texture page-image-content-generators texture-profile compress)
           texture-resource (-> texture-build-target :resource :resource)
-          pb-msg (protobuf/pb->map texture-set)
           dep-build-targets [texture-build-target]]
       [(pipeline/make-protobuf-build-target
          resource dep-build-targets
          TextureSetProto$TextureSet
-         (assoc pb-msg :texture texture-resource)
+         (assoc texture-set :texture texture-resource)
          [:texture])])))
 
 (g/defnk produce-anim-data [texture-set uv-transforms]
-  (let [texture-set-pb-map (protobuf/pb->map texture-set)
-        uv-transforms (into [] uv-transforms)]
-    (texture-set/make-anim-data texture-set-pb-map uv-transforms)))
-
-(s/defrecord AtlasRect
-  [path :- s/Any
-   x :- types/Int32
-   y :- types/Int32
-   width :- types/Int32
-   height :- types/Int32
-   page :- types/Int32])
+  (texture-set/make-anim-data texture-set uv-transforms))
 
 (defn- modify-tpinfo-image-node-outline [tpinfo-image-node-outline rename-patterns id-counts]
   (let [original-name (:node-outline-key tpinfo-image-node-outline)
         final-name (rename-id original-name rename-patterns)
-        has-duplicate-name (> (id-counts final-name) 1)]
+        has-duplicate-name (> (long (id-counts final-name)) 1)]
     (assoc tpinfo-image-node-outline
       :label final-name
       :outline-error? has-duplicate-name)))
@@ -1068,6 +1062,14 @@
               (map (fn [image-node-outline]
                      (modify-tpinfo-image-node-outline image-node-outline rename-patterns id-counts))))
         (:children tpinfo-node-outline)))
+
+(set! *warn-on-reflection* false)
+(defn- make-uv-transforms+texture-set [^String path atlas]
+  (let [result (plugin-create-texture-set-result path atlas "")
+        texture-set (protobuf/pb->map (.left result)) ; Reflection from (.left) call on unknown type.
+        uv-transforms (vec (.right result))] ; Reflection from (.right) call on unknown type.
+    (pair uv-transforms texture-set)))
+(set! *warn-on-reflection* true)
 
 (g/defnode TPAtlasNode
   (inherits resource-node/ResourceNode)
@@ -1095,7 +1097,7 @@
             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
             (dynamic read-only? (g/constantly true)))
 
-  (property rename-patterns RenamePatterns
+  (property rename-patterns g/Str
             (dynamic error (g/fnk [_node-id rename-patterns]
                              (validate-rename-patterns _node-id rename-patterns))))
 
@@ -1107,7 +1109,7 @@
   (input texture-profiles g/Any)
 
   (input animation-save-values g/Any :array) ; Array of texture packer Atlas$AtlasAnimation protobuf messages in map format for each manually created animation.
-  (input animation-ids FinalName :array) ; Array of the manually created animation ids.
+  (input animation-ids g/Str :array) ; Array of the manually created animation ids.
   (input animation-scenes Scene :array)
   (input animation-build-errors g/Any :array)
 
@@ -1134,18 +1136,18 @@
               (count (:pages tpinfo))
               texture/non-paged-page-count)))
 
-  (output texture-set-result g/Any :cached
-          ;; TODO: This is not fully configured. Rename to preview-texture-set-result or texture-set+uv-transforms?
+  (output uv-transforms+texture-set g/Any :cached
           (g/fnk [_node-id resource save-value tpinfo tpinfo-file-resource]
             (or (validate-tpinfo-file _node-id tpinfo-file-resource)
+                (validate-rename-patterns _node-id (:rename-patterns save-value))
                 (let [path (resource/path resource)
                       tpatlas-bytes (protobuf/map->bytes tpatlas-pb-cls save-value)
                       tpinfo-bytes (protobuf/map->bytes tpinfo-pb-cls tpinfo)
                       atlas (plugin-create-full-atlas path tpatlas-bytes tpinfo-bytes)]
-                  (plugin-create-texture-set-result path atlas "")))))
+                  (make-uv-transforms+texture-set path atlas)))))
 
-  (output uv-transforms g/Any (g/fnk [texture-set-result] (.right texture-set-result)))
-  (output texture-set g/Any (g/fnk [texture-set-result] (.left texture-set-result)))
+  (output uv-transforms g/Any (g/fnk [uv-transforms+texture-set] (first uv-transforms+texture-set)))
+  (output texture-set g/Any (g/fnk [uv-transforms+texture-set] (second uv-transforms+texture-set)))
   (output anim-data g/Any :cached produce-anim-data) ; Atlas node protocol.
 
   (output texture-profile g/Any
@@ -1173,8 +1175,8 @@
   (output node-outline outline/OutlineData :cached
           (g/fnk [_node-id tpinfo-node-outline rename-patterns id-counts child-outlines own-build-errors]
             {:node-id _node-id
-             :node-outline-key "Atlas"
-             :label "Atlas"
+             :node-outline-key tpatlas-resource-label
+             :label tpatlas-resource-label
              :icon tpatlas-icon
              :outline-error? (g/error-fatal? own-build-errors)
              :children (into (make-tpinfo-node-outline-copies tpinfo-node-outline rename-patterns id-counts)
@@ -1329,7 +1331,7 @@
   (concat
     (resource-node/register-ddf-resource-type workspace
       :ext tpinfo-file-ext
-      :label "Texture Packer Export File"
+      :label tpinfo-resource-label
       :node-type TPInfoNode
       :load-fn load-tpinfo-file
       :icon tpinfo-icon
@@ -1339,7 +1341,7 @@
     (resource-node/register-ddf-resource-type workspace
       :ext tpatlas-file-ext
       :build-ext "a.texturesetc"
-      :label "Texture Packer Atlas"
+      :label tpatlas-resource-label
       :node-type TPAtlasNode
       :ddf-type tpatlas-pb-cls
       :load-fn load-tpatlas-file
@@ -1359,26 +1361,3 @@
   (fn [x] (load-plugin-texturepacker x)))
 
 (return-plugin)
-
-
-;; TODO:
-;; * Sort the images? Hmm. We don't do this for regular atlases.
-;; * Select from `.tpinfo` images in AtlasAnim.
-
-;; DONE:
-;; * Fix exception when clearing the `.tpinfo` File property in a `.tpatlas` with animations.
-;; * Fix exception when dragging frames between animations in Outline.
-;; * Fix exception when adding animation frames.
-;; * Add the ability to add multiple animation frames at once.
-;; * Add the ability to remove selected frames from an animation.
-;; * Fix Outline panel icons for `.tpinfo` resources.
-;; * The built texture now respects non-compression settings (such as mipmap) of the texture profile matched by the `.tpatlas` file.
-;; * Removing a .png file from disk now results in a build error and on the Image property field.
-;; * The Page Image resource field is now editable so users can patch up invalid page image references.
-;; * Edits to a .png file from an external application now show up in scene views and the build output.
-;; * Renaming a .png file now updates references in the `.tpinfo` file and the build output.
-;; * Refactoring: Use map representation of `.tpinfo` instead of Protobuf Message object.
-;; * The animations refer to the original image names in the saved project files, but use the final image names in the build output.
-;; * Report duplicate animation ids as build errors from `.tpatlas`.
-;; * Clean up excessive connections and data dependencies.
-;; * Fix image AABBs for box selection.
