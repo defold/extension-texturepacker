@@ -75,6 +75,7 @@
 (def ^:private tpinfo-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Atlas"))
 (def ^:private tpinfo-page-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Info$Page"))
 (def ^:private tpatlas-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Atlas$AtlasDesc"))
+(def ^:private tpatlas-animation-pb-cls (workspace/load-class! "com.dynamo.texturepacker.proto.Atlas$AtlasAnimation"))
 (def ^:private tp-plugin-cls (workspace/load-class! "com.dynamo.bob.pipeline.tp.Atlas"))
 
 (def ^:private byte-array-cls (Class/forName "[B"))
@@ -294,23 +295,33 @@
                               :tags #{:atlas :outline}
                               :passes [pass/outline]}}]}))
 
+(defn- scene-info-text
+  ([resource-type-label ^long page-count page-size]
+   (if (zero? page-count)
+     (format "%s: No pages" resource-type-label)
+     (let [[page-width page-height] page-size]
+       (format "%s: %d pages, %d x %d" resource-type-label page-count (long page-width) (long page-height)))))
+  ([resource-label ^long page-count page-size texture-profile-name]
+   (let [basic-info-text (scene-info-text resource-label page-count page-size)]
+     (format "%s (%s profile)" basic-info-text (or texture-profile-name "no")))))
+
 (g/defnk produce-tpinfo-scene [_node-id gpu-texture image-scenes-by-original-name layout-pages page-offset-transforms size]
-  (let [[width height] size
+  (let [info-text (scene-info-text tpinfo-resource-label (count layout-pages) size)
         page-scenes (mapv #(make-page-scene %1 %2 gpu-texture)
                           layout-pages
                           page-offset-transforms)]
-    {:info-text (format "TexturePacker File (.tpinfo): %d pages %d x %d" (count layout-pages) (int width) (int height))
+    {:info-text info-text
      :children (into page-scenes
                      (map val)
                      image-scenes-by-original-name)}))
 
 (g/defnk produce-tpatlas-scene [_node-id size texture-profile tpinfo tpinfo-scene animation-scenes]
-  (let [[width height] size]
-    (if (nil? tpinfo-scene)
-      {:info-text (format "Atlas: 0 pages 0 x 0")}
-      {:info-text (format "Atlas: %d pages %d x %d (%s profile)" (count (:pages tpinfo)) (int width) (int height) (:name texture-profile "no"))
-       :children (into [tpinfo-scene]
-                       animation-scenes)})))
+  (let [info-text (scene-info-text tpatlas-resource-label (count (:pages tpinfo)) size (:name texture-profile))]
+    {:info-text info-text
+     :children (if (nil? tpinfo-scene)
+                 []
+                 (into [tpinfo-scene]
+                       animation-scenes))}))
 
 (g/defnk produce-tpinfo-save-value [page-infos tpinfo]
   ;; The user might have moved or renamed the page image files in the project.
@@ -493,18 +504,20 @@
 
   (output page-offset-transforms [Matrix4d] :cached
           (g/fnk [layout-pages]
-            (into []
-                  (map (fn [^double page-offset-x]
-                         (doto (Matrix4d.)
-                           (.setIdentity)
-                           (.setTranslation (Vector3d. page-offset-x 0.0 0.0)))))
-                  (reductions (fn [^double prev-page-offset ^TextureSetLayout$Page layout-page]
-                                (let [layout-size (.size layout-page)
-                                      page-width (.width layout-size)
-                                      page-spacing 32.0]
-                                  (+ prev-page-offset page-spacing page-width)))
-                              0.0
-                              (pop layout-pages)))))
+            (if (zero? (count layout-pages))
+              []
+              (->> layout-pages
+                   (pop)
+                   (reductions (fn [^double prev-page-offset ^TextureSetLayout$Page layout-page]
+                                 (let [layout-size (.size layout-page)
+                                       page-width (.width layout-size)
+                                       page-spacing 32.0]
+                                   (+ prev-page-offset page-spacing page-width)))
+                               0.0)
+                   (mapv (fn [^double page-offset-x]
+                           (doto (Matrix4d.)
+                             (.setIdentity)
+                             (.setTranslation (Vector3d. page-offset-x 0.0 0.0)))))))))
 
   (output image-scenes-by-original-name OriginalName->Scene :cached
           (g/fnk [layout-pages page-infos page-offset-transforms]
@@ -654,12 +667,15 @@
   (input image-node-id+original-names NodeID+OriginalName :array :cascade-delete)
   (input tpinfo-parent-dir-file File) ; Used to convert the page image resource proj-path into a page image file name relative to the `.tpinfo` file.
   (input image-resource resource/Resource)
+  (input image-content-generator g/Any)
 
   (input tpinfo-image-infos-by-original-name OriginalName->ImageInfo)
   (output tpinfo-image-infos-by-original-name OriginalName->ImageInfo (gu/passthrough tpinfo-image-infos-by-original-name))
 
-  (input image-content-generator g/Any)
-  (output image-content-generator g/Any (gu/passthrough image-content-generator))
+  (output image-content-generator g/Any
+          (g/fnk [_node-id image-content-generator image-resource]
+            (or (validate-page-image _node-id image-resource)
+                image-content-generator)))
 
   (output image-name PageImageName :cached
           (g/fnk [image-resource tpinfo-parent-dir-file]
@@ -751,6 +767,13 @@
   (or (validation/prop-error :fatal _node-id :file validation/prop-nil? resource "File")
       (validation/prop-error :fatal _node-id :file validation/prop-resource-not-exists? resource "File")))
 
+(defn- validate-tpinfo-for-tpatlas-use [_node-id tpinfo]
+  (validation/prop-error :fatal _node-id :file
+                         (fn [^long page-count]
+                           (when-not (pos? page-count)
+                             "Referenced .tpinfo file contains no images."))
+                         (count (:pages tpinfo))))
+
 ;; *****************************************************************************
 
 ;; Attaches an AtlasImageNode to an AtlasAnimationNode
@@ -804,14 +827,15 @@
   (validation/prop-error :fatal node-id :fps validation/prop-negative? fps "Fps"))
 
 (g/defnk produce-animation-save-value [id fps flip-horizontal flip-vertical playback image-node-id+original-names]
-  {:id id
-   :fps fps
-   :flip-horizontal (if flip-horizontal 1 0) ; TODO: Use protobuf/boolean->int when available.
-   :flip-vertical (if flip-vertical 1 0) ; TODO: Use protobuf/boolean->int when available.
-   :playback playback
-   :images (mapv (fn [[_node-id original-name]]
-                   original-name)
-                 image-node-id+original-names)})
+  (protobuf/make-map-without-defaults tpatlas-animation-pb-cls
+    :id id
+    :fps fps
+    :flip-horizontal (protobuf/boolean->int flip-horizontal)
+    :flip-vertical (protobuf/boolean->int flip-vertical)
+    :playback playback
+    :images (mapv (fn [[_node-id original-name]]
+                    original-name)
+                  image-node-id+original-names)))
 
 (defn- render-animation [^GL2 gl render-args renderables n]
   (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx atlas-shader))
@@ -838,12 +862,11 @@
 
   (property id g/Str
             (dynamic error (g/fnk [_node-id id id-counts] (validate-animation-id _node-id id id-counts))))
-  (property fps g/Int
-            (default 24)
+  (property fps g/Int (default (protobuf/default tpatlas-animation-pb-cls :fps))
             (dynamic error (g/fnk [_node-id fps] (validate-animation-fps _node-id fps))))
-  (property flip-horizontal g/Bool)
-  (property flip-vertical g/Bool)
-  (property playback types/AnimationPlayback
+  (property flip-horizontal g/Bool (default (protobuf/int->boolean (protobuf/default tpatlas-animation-pb-cls :flip-horizontal))))
+  (property flip-vertical g/Bool (default (protobuf/int->boolean (protobuf/default tpatlas-animation-pb-cls :flip-vertical))))
+  (property playback types/AnimationPlayback (default (protobuf/default tpatlas-animation-pb-cls :playback))
             (dynamic edit-type (g/constantly (properties/->pb-choicebox Tile$Playback))))
 
   (input image-node-id+original-names NodeID+OriginalName :array :cascade-delete)
@@ -932,31 +955,33 @@
         (attach-image-to-animation animation-node atlas-image)))))
 
 (defn- add-atlas-animation-node [atlas-node anim]
+  {:pre [(map? anim)]} ; Atlas$AtlasAnimation in map format.
   (let [graph-id (g/node-id->graph-id atlas-node)
         image-names (:images anim)]
     (g/make-nodes
       graph-id
-      [atlas-anim [AtlasAnimationNode
-                   :flip-horizontal (:flip-horizontal anim)
-                   :flip-vertical (:flip-vertical anim)
-                   :fps (:fps anim)
-                   :playback (:playback anim)
-                   :id (:id anim)]]
+      [animation-node AtlasAnimationNode]
       (concat
-        (attach-animation-to-atlas atlas-node atlas-anim)
-        (add-image-nodes-to-animation-node atlas-anim image-names)))))
+        (gu/set-properties-from-pb-map animation-node tpatlas-animation-pb-cls anim
+          id :id
+          flip-horizontal :flip-horizontal
+          flip-vertical :flip-vertical
+          fps :fps
+          playback :playback)
+        (attach-animation-to-atlas atlas-node animation-node)
+        (add-image-nodes-to-animation-node animation-node image-names)))))
 
 ;; .tpatlas file
 (defn- load-tpatlas-file [project self resource tpatlas]
-  (let [tpinfo-resource (workspace/resolve-resource resource (:file tpatlas))
+  {:pre [(map? tpatlas)]} ; Atlas$AtlasDesc in map format.
+  (let [resolve-resource #(workspace/resolve-resource resource %)
         tx-data (concat
                   (g/connect project :build-settings self :build-settings)
                   (g/connect project :texture-profiles self :texture-profiles)
-                  (g/set-property self
-                    :file tpinfo-resource
-                    :tpatlas tpatlas
-                    :rename-patterns (:rename-patterns tpatlas)
-                    :is-paged-atlas (:is-paged-atlas tpatlas))
+                  (gu/set-properties-from-pb-map self tpatlas-pb-cls tpatlas
+                    file (resolve-resource :file)
+                    rename-patterns :rename-patterns
+                    is-paged-atlas :is-paged-atlas)
                   (mapv (fn [animation]
                           (->> animation
                                (update-int->bool [:flip-horizontal :flip-vertical])
@@ -966,10 +991,11 @@
 
 ;; saving the .tpatlas file
 (g/defnk produce-tpatlas-save-value [file animation-save-values rename-patterns is-paged-atlas]
-  {:file (resource/resource->proj-path file)
-   :rename-patterns rename-patterns
-   :is-paged-atlas is-paged-atlas
-   :animations animation-save-values})
+  (protobuf/make-map-without-defaults tpatlas-pb-cls
+    :file (resource/resource->proj-path file)
+    :rename-patterns rename-patterns
+    :is-paged-atlas is-paged-atlas
+    :animations animation-save-values))
 
 (defn- validate-rename-patterns [node-id rename-patterns]
   (try
@@ -1037,13 +1063,14 @@
           texture-resource (-> texture-build-target :resource :resource)
           dep-build-targets [texture-build-target]]
       [(pipeline/make-protobuf-build-target
-         resource dep-build-targets
-         TextureSetProto$TextureSet
+         _node-id resource TextureSetProto$TextureSet
          (assoc texture-set :texture texture-resource)
-         [:texture])])))
+         dep-build-targets)])))
 
 (g/defnk produce-anim-data [texture-set uv-transforms]
-  (texture-set/make-anim-data texture-set uv-transforms))
+  (if (empty? (:animations texture-set))
+    {}
+    (texture-set/make-anim-data texture-set uv-transforms)))
 
 (defn- modify-tpinfo-image-node-outline [tpinfo-image-node-outline rename-patterns id-counts]
   (let [original-name (:node-outline-key tpinfo-image-node-outline)
@@ -1066,7 +1093,7 @@
 (set! *warn-on-reflection* false)
 (defn- make-uv-transforms+texture-set [^String path atlas]
   (let [result (plugin-create-texture-set-result path atlas "")
-        texture-set (protobuf/pb->map (.left result)) ; Reflection from (.left) call on unknown type.
+        texture-set (protobuf/pb->map-without-defaults (.left result)) ; Reflection from (.left) call on unknown type.
         uv-transforms (vec (.right result))] ; Reflection from (.right) call on unknown type.
     (pair uv-transforms texture-set)))
 (set! *warn-on-reflection* true)
@@ -1090,19 +1117,17 @@
             (dynamic error (g/fnk [_node-id file]
                              (validate-tpinfo-file _node-id file))))
 
-  (property tpatlas g/Any (dynamic visible (g/constantly false)))
-
   (property size types/Vec2
             (value (g/fnk [tpinfo] (tpinfo->size-vec2 tpinfo)))
             (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["W" "H"]}))
             (dynamic read-only? (g/constantly true)))
 
-  (property rename-patterns g/Str
+  (property rename-patterns g/Str (default (protobuf/default tpatlas-pb-cls :rename-patterns))
             (dynamic error (g/fnk [_node-id rename-patterns]
                              (validate-rename-patterns _node-id rename-patterns))))
 
   ;; User setting, to manually choose if an atlas with a single page should use a texture array or not.
-  (property is-paged-atlas g/Bool
+  (property is-paged-atlas g/Bool (default (protobuf/default tpatlas-pb-cls :is-paged-atlas))
             (dynamic visible (g/fnk [tpinfo] (not (tpinfo-has-multiple-pages? tpinfo)))))
 
   (input build-settings g/Any)
@@ -1139,7 +1164,9 @@
   (output uv-transforms+texture-set g/Any :cached
           (g/fnk [_node-id resource save-value tpinfo tpinfo-file-resource]
             (or (validate-tpinfo-file _node-id tpinfo-file-resource)
-                (validate-rename-patterns _node-id (:rename-patterns save-value))
+                (validate-tpinfo-for-tpatlas-use _node-id tpinfo)
+                (when-some [rename-patterns (:rename-patterns save-value)] ; Stripped from save-value if empty.
+                  (validate-rename-patterns _node-id rename-patterns))
                 (let [path (resource/path resource)
                       tpatlas-bytes (protobuf/map->bytes tpatlas-pb-cls save-value)
                       tpinfo-bytes (protobuf/map->bytes tpinfo-pb-cls tpinfo)
