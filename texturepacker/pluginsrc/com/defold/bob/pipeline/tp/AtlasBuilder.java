@@ -202,7 +202,7 @@ public class AtlasBuilder extends Builder<Void> {
         return out;
     }
 
-    static private TextureSetLayout.Page createPage(int index, Info.Page srcPage) {
+    static public TextureSetLayout.Page createPage(int index, Info.Page srcPage) {
         TextureSetLayout.Page page = new TextureSetLayout.Page();
         page.index = index;
         page.name = srcPage.getName();
