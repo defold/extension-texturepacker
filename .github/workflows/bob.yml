@@ -77,7 +77,9 @@ jobs:
           java -jar bob.jar --version
 
       - name: Cleanup test content
-        run: del ./examples/broken/broken.tpatlas ./examples/broken/missing_image.tpinfo
+        run: |
+          del .\examples\broken\broken.tpatlas
+          del .\examples\broken\missing_image.tpinfo
 
       - name: Resolve libraries
         run: java -jar bob.jar resolve --email a@b.com --auth 123456
