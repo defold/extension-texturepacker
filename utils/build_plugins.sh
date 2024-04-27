@@ -5,11 +5,11 @@
 set -e
 
 PROJECT=texturepacker
-#DEFAULT_SERVER=https://build-stage.defold.com
-DEFAULT_SERVER=http://localhost:9000
+DEFAULT_SERVER=https://build-stage.defold.com
+#DEFAULT_SERVER=http://localhost:9000
 
-# 1.6.1 stable
-#DEFOLDSDK=a90c50928623cf23b3687a7eec05972d11427202
+# 1.8.0 stable
+DEFOLDSDK=fd3b8c652df601220d8651f581fa2fada8205237
 
 if [ "" == "${BOB}" ]; then
     BOB=${DYNAMO_HOME}/share/java/bob.jar

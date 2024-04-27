@@ -11,10 +11,10 @@
     <displayName>DefoldExporter</displayName>
 
     <!-- A description of the exporter -->
-    <description>TexturePacker to Defold exporter</description>
+    <description>Exporter for Defold</description>
 
     <!-- Exporter version -->
-    <version>1.0</version>
+    <version>1.1</version>
 
     <files>
 
@@ -29,7 +29,7 @@
             <name>defold</name>
 
             <!-- human-readable name (used in the TexturePacker GUI) -->
-            <displayName>DefoldAtlas</displayName>
+            <displayName>Atlas file</displayName>
 
             <!-- file extension, without '.' -->
             <fileExtension>tpinfo</fileExtension>
@@ -84,7 +84,7 @@
              cw:  clockwise rotation
              ccw: counterclockwise rotation
          The amount of rotation is always 90°. Only required for supportsRotation=true -->
-    <rotationDirection>ccw</rotationDirection>
+    <rotationDirection>cw</rotationDirection>
 
     <!-- If enabled TexturePacker allows the user to choose non-power-of-2 sizes for sprite
          sheets. Otherwise, only power-of-2 (POT) sizes are enabled in the user interface. -->

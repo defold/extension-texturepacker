@@ -258,10 +258,6 @@ public class Atlas {
 
             for (TextureSetLayout.Page page : atlas.pages) {
                 for (TextureSetLayout.SourceImage image : page.images) {
-                    //System.out.printf("IMAGE: %s\n", image.name);
-                    boolean found = image.name.equals("box_fill_64") || image.name.equals("triangle_fill_64");
-                    if (!found)
-                        continue;
                     System.out.printf("\nFOUND: %s\n", image.name);
 
                     float[] vertices = Atlas.getTriangles(image, page.size.height);

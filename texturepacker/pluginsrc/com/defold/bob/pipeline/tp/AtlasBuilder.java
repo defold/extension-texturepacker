@@ -180,24 +180,58 @@ public class AtlasBuilder extends Builder<Void> {
     static private TextureSetLayout.SourceImage createSprite(Info.Sprite srcSprite) {
         TextureSetLayout.SourceImage out = new TextureSetLayout.SourceImage();
 
-        out.name            = srcSprite.getName();
-        out.rotated         = srcSprite.getRotated();
+        boolean rotated = srcSprite.getRotated();
+
+        out.setName(srcSprite.getName());
+        out.setRotated(rotated);
 
         Info.Rect tightRect   = srcSprite.getFrameRect();
-        Info.Size originalSze = srcSprite.getUntrimmedSize();
+        Info.Size originalSize= srcSprite.getUntrimmedSize();
         // The offset from the top left corner of the image, where to find the tight rect
         Info.Point offset     = srcSprite.getCornerOffset();
 
-        out.rect = new TextureSetLayout.Rectangle(tightRect.getX() - offset.getX(), tightRect.getY() - offset.getY(),
-                                                  originalSze.getWidth(), originalSze.getHeight());
 
-        out.indices = new ArrayList<>(srcSprite.getIndicesList());
-        out.vertices = new ArrayList<>();
+        float x = tightRect.getX() - offset.getX();
+        float y = tightRect.getY() - offset.getY();
+        float width;
+        float height;
+
+        // For legacy reasons, the other bob code wants it already rotated
+        if (rotated)
+        {
+            width = originalSize.getHeight();
+            height = originalSize.getWidth();
+        }
+        else
+        {
+            width = originalSize.getWidth();
+            height = originalSize.getHeight();
+        }
+        out.setRect(new TextureSetLayout.Rectangle(x, y, width, height));
+
+        out.setIndices(new ArrayList<>(srcSprite.getIndicesList()));
+
+        ArrayList<TextureSetLayout.Point> vertices = new ArrayList<>();
         for (Info.Point p : srcSprite.getVerticesList()) {
             TextureSetLayout.Point pout = AtlasBuilder.createPoint(p);
-            pout.y = originalSze.getHeight() - pout.y;
-            out.vertices.add(pout);
+
+            // to keep in line with the rotated image dimensions, we rotate the vertices here
+            if (rotated)
+            {
+                // rotate the points CCW
+                float tmp = -pout.y;
+                pout.y = pout.x;
+                pout.x = tmp;
+                pout.x += width; // Make sure the coords are on the positive sides of XY axis
+            }
+            else
+            {
+                pout.y = originalSize.getHeight() - pout.y;
+            }
+
+            vertices.add(pout);
         }
+        out.setVertices(vertices);
 
         return out;
     }
