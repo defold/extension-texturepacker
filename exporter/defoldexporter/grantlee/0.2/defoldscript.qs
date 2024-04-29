@@ -116,7 +116,7 @@ var exportAtlas = function(root)
 		""
 	);
 
-	output.push("version: \"1.0\""); 							  // our file format version
+	output.push("version: \"1.1\""); 							  // our file format version
 	output.push("description: \"Exported using TexturePacker\""); // The tool used
 
     let textures = root.allResults[root.variantIndex].textures;
