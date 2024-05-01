@@ -88,7 +88,7 @@
 
     <!-- If enabled TexturePacker allows the user to choose non-power-of-2 sizes for sprite
          sheets. Otherwise, only power-of-2 (POT) sizes are enabled in the user interface. -->
-    <supportsNPOT>false</supportsNPOT>
+    <supportsNPOT>true</supportsNPOT>
 
     <!-- the following flags are optional: -->
 
@@ -97,7 +97,7 @@
     <supportsPolygonPacking>true</supportsPolygonPacking>
 
     <!-- target framework supports pivot point settings (default=false) -->
-    <supportsPivotPoint>false</supportsPivotPoint>
+    <supportsPivotPoint>true</supportsPivotPoint>
 
     <!-- target framework accepts sprite names without file name extension. (default=false) -->
     <supportsTrimSpriteNames>false</supportsTrimSpriteNames>
@@ -130,8 +130,8 @@
         <borderPadding>0</borderPadding>
         <trimMode>Polygon</trimMode>               <!-- None, Trim, Crop, CropKeepPos, Polygon -->
         <sizeConstraints>POT</sizeConstraints>     <!-- POT, WordAligned, AnySize -->
-        <writePivotPoints>trufalsee</writePivotPoints>  <!-- true, false -->
-        <defaultPivotPoint>0.0,0.0</defaultPivotPoint>
+        <writePivotPoints>false</writePivotPoints>  <!-- true, false -->
+        <defaultPivotPoint>0.5,0.5</defaultPivotPoint>
     </defaults>
 
     <!-- TexturePacker's "scaling variants" dialog provides a set of presets.

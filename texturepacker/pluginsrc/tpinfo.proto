@@ -26,6 +26,7 @@ message Rect
     required float height = 4;
 }
 
+// Coordinates are in image space (texels)
 message Sprite
 {
     required string name = 1;
@@ -40,6 +41,8 @@ message Sprite
 
     repeated Point  vertices = 9;
     repeated int32  indices = 10;
+
+    optional Point  pivot = 11;         // An offset from the top left corner, where the final center point will be at runtime
 }
 
 message Page
