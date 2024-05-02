@@ -177,6 +177,18 @@ public class AtlasBuilder extends Builder<Void> {
         return new TextureSetLayout.Point(point.getX(), point.getY());
     }
 
+    static String toString(Info.Rect r) {
+        return String.format("x/y: %f, %f  w/h: %f, %f", r.getX(), r.getY(), r.getWidth(), r.getHeight());
+    }
+
+    static String toString(Info.Size s) {
+        return String.format("w/h: %f, %f", s.getWidth(), s.getHeight());
+    }
+
+    static String toString(Info.Point p) {
+        return String.format("x/y: %f, %f", p.getX(), p.getY());
+    }
+
     static private TextureSetLayout.SourceImage createSprite(Info.Sprite srcSprite) {
         TextureSetLayout.SourceImage out = new TextureSetLayout.SourceImage();
 
@@ -185,14 +197,16 @@ public class AtlasBuilder extends Builder<Void> {
         out.setName(srcSprite.getName());
         out.setRotated(rotated);
 
-        Info.Rect tightRect   = srcSprite.getFrameRect();
-        Info.Size originalSize= srcSprite.getUntrimmedSize();
+        Info.Size originalSize= srcSprite.getUntrimmedSize(); // Original, unrotated size
+        Info.Rect tightRect   = srcSprite.getFrameRect(); // potentially rotated 90 deg CW
+        Info.Point offset     = srcSprite.getCornerOffset(); // unrotated
+
         // The offset from the top left corner of the image, where to find the tight rect
-        Info.Point offset     = srcSprite.getCornerOffset();
+        float offsetx = offset.getX();
+        float offsety = offset.getY();
 
-
-        float x = tightRect.getX() - offset.getX();
-        float y = tightRect.getY() - offset.getY();
+        float x;
+        float y;
         float width;
         float height;
 
@@ -201,12 +215,37 @@ public class AtlasBuilder extends Builder<Void> {
         {
             width = originalSize.getHeight();
             height = originalSize.getWidth();
+
+            // When rotated, the "top left" of the image is now the top right
+            // and we need to use the tight rect to find it
+            float corner_x = tightRect.getX() + tightRect.getWidth() + offsety;
+            float corner_y = tightRect.getY() - offsetx;
+            x = corner_x - originalSize.getHeight();
+            y = corner_y;
         }
         else
         {
+            x = tightRect.getX() - offsetx;
+            y = tightRect.getY() - offsety;
             width = originalSize.getWidth();
             height = originalSize.getHeight();
         }
+
+
+        // boolean debug = (tightRect.getX() == 223 && tightRect.getY() == 60) || // boy_slash6
+        //                 (tightRect.getX() == 53 && tightRect.getY() == 40); // boy_death10
+        // if (debug)
+        // {
+        //     System.out.printf("originalSize %s\n", toString(originalSize));
+        //     System.out.printf("tightRect %s\n", toString(tightRect));
+        //     System.out.printf("offset %s\n", toString(offset));
+        //     System.out.printf("rotated %s\n", rotated ? "true" : "false");
+        //     System.out.printf("  ->\n");
+        //     System.out.printf("  offsetx/offsety %f %f\n", offsetx, offsety);
+        //     System.out.printf("  x/y %f, %f\n", x, y);
+        //     System.out.printf("  w/h %f, %f\n", width, height);
+        // }
+
         out.setRect(new TextureSetLayout.Rectangle(x, y, width, height));
 
         out.setIndices(new ArrayList<>(srcSprite.getIndicesList()));
@@ -214,20 +253,9 @@ public class AtlasBuilder extends Builder<Void> {
         ArrayList<TextureSetLayout.Point> vertices = new ArrayList<>();
         for (Info.Point p : srcSprite.getVerticesList()) {
             TextureSetLayout.Point pout = AtlasBuilder.createPoint(p);
-
-            // to keep in line with the rotated image dimensions, we rotate the vertices here
-            if (rotated)
-            {
-                // rotate the points CCW
-                float tmp = -pout.y;
-                pout.y = pout.x;
-                pout.x = tmp;
-                pout.x += width; // Make sure the coords are on the positive sides of XY axis
-            }
-            else
-            {
-                pout.y = originalSize.getHeight() - pout.y;
-            }
+            // When they come from TP the vertices are upside down
+            // but othersize in the original image space (the way the builder wants it)
+            pout.y = originalSize.getHeight() - pout.y;
 
             vertices.add(pout);
         }

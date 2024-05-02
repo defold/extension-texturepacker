@@ -137,10 +137,14 @@ public class Atlas {
     // Used from editor
     // returns an array of floats (flattened (x,y)-tuples): [x0,y0,x1,y1,x2,...]
     static public float[] getTriangles(TextureSetLayout.SourceImage image, Float pageHeight) {
-        float half_width = image.rect.width * 0.5f;
-        float half_height = image.rect.height * 0.5f;
-        float centerx = image.rect.x + half_width;
-        float centery = image.rect.y + half_height;
+
+        // The image may be rotated, then so is the rectangle
+        float originalWidth = image.rotated ? image.rect.height : image.rect.width;
+        float originalHeight = image.rotated ? image.rect.width : image.rect.height;
+        float half_width = originalWidth * 0.5f;
+        float half_height = originalHeight * 0.5f;
+        float page_centerx = image.rect.x + image.rect.width * 0.5f;
+        float page_centery = image.rect.y + image.rect.height * 0.5f;
 
         //System.out.printf("image %s: %f, %f, %f, %f  %f\n", image.name, image.rect.x, image.rect.y, image.rect.width, image.rect.height, pageHeight);
 
@@ -150,21 +154,32 @@ public class Atlas {
             // The vertices are in image local space. Upright, regardless of rotation
             TextureSetLayout.Point p = image.vertices.get(index);
 
-            //System.out.printf("p: %f, %f\n", p.x, p.y);
+            //System.out.printf("  p %d: %f, %f  w/h\n", index, p.x, p.y, image.rect.width, image.rect.height);
 
             // make it local around the center point
             float x = p.x - half_width;
             float y = p.y - half_height;
             //System.out.printf("  local: %f, %f\n", x, y);
 
+            // A rotated image is stored with a 90 deg CW rotation
+            // so we need to convert the vertices into the uv space of that image
+            if (image.rotated) // rotate 90 degrees CW
+            {
+                float t = y;
+                y = -x;
+                x = t;
+
+                //System.out.printf("  rotated: %f, %f\n", x, y);
+            }
+
             // flip y in the local space
             y *= -1;
             //System.out.printf("  flipped: %f, %f\n", x, y);
 
             // offset it into the page
-            x = centerx + x;
-            y = centery + y;
-            //System.out.printf("  center: %f, %f\n", x, y);
+            x = page_centerx + x;
+            y = page_centery + y;
+            //System.out.printf("  added center: %f, %f\n", x, y);
 
             // flip y in the page space
             y = pageHeight - y;
