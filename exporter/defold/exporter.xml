@@ -100,7 +100,7 @@
     <supportsPolygonPacking>true</supportsPolygonPacking>
 
     <!-- target framework supports pivot point settings (default=false) -->
-    <supportsPivotPoint>true</supportsPivotPoint>
+    <supportsPivotPoint>false</supportsPivotPoint>
 
     <!-- target framework accepts sprite names without file name extension. (default=false) -->
     <supportsTrimSpriteNames>false</supportsTrimSpriteNames>
