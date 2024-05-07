@@ -4,11 +4,14 @@
          This value is stored when the exporter is referenced from a saved file (.tps).
          It is also used to select the exporter from command line.
          Change this if you've duplicated an existing exporter -->
-    <name>defoldexporter</name>
+    <name>defold</name>
+
+    <nameAlias>defoldexporter</nameAlias>
 
     <!-- Name of the exporter that is shown in the framework selector dialog -->
     <!-- Change this if you duplicated an existing exporter -->
-    <displayName>DefoldExporter</displayName>
+    <displayName>Defold</displayName>
+
 
     <!-- A description of the exporter -->
     <description>Exporter for Defold</description>
@@ -97,7 +100,7 @@
     <supportsPolygonPacking>true</supportsPolygonPacking>
 
     <!-- target framework supports pivot point settings (default=false) -->
-    <supportsPivotPoint>true</supportsPivotPoint>
+    <supportsPivotPoint>false</supportsPivotPoint>
 
     <!-- target framework accepts sprite names without file name extension. (default=false) -->
     <supportsTrimSpriteNames>false</supportsTrimSpriteNames>
