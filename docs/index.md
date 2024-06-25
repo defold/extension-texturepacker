@@ -62,3 +62,8 @@ There are some differences:
 * You cannot add new images to the `.tpatlas` file.
 
 In both cases, the workaround is to reexport the `.tpinfo` file from the Texture Packer tool.
+
+## Additional resources
+
+* Watch "How to use Texture Packer Sprite Sheets and Animations with Defold?" [on YouTube](https://www.youtube.com/watch?v=vfdyCzndWCM)
+* Read the official [Getting Started guide](https://www.codeandweb.com/texturepacker/documentation) for Texture Packer
