@@ -8,8 +8,8 @@ PROJECT=texturepacker
 DEFAULT_SERVER=https://build-stage.defold.com
 #DEFAULT_SERVER=http://localhost:9000
 
-# 1.8.0 stable
-DEFOLDSDK=fd3b8c652df601220d8651f581fa2fada8205237
+# 1.9.3 alpha
+DEFOLDSDK=b5ed137e64ee409ce64bcf468947385e8091f41b
 
 if [ "" == "${BOB}" ]; then
     BOB=${DYNAMO_HOME}/share/java/bob.jar
