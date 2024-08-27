@@ -1,5 +1,5 @@
 // License MIT
-// Copyright 2023 Defold Foundation (www.defold.com
+// Copyright 2023 Defold Foundation (www.defold.com)
 
 package com.dynamo.bob.pipeline.tp;
 
@@ -14,7 +14,7 @@ import java.awt.image.BufferedImage;
 import com.dynamo.bob.pipeline.BuilderUtil;
 import com.dynamo.bob.pipeline.ProtoUtil;
 
-import com.dynamo.bob.Builder;
+import com.dynamo.bob.ProtoBuilder;
 import com.dynamo.bob.BuilderParams;
 import com.dynamo.bob.CompileExceptionError;
 import com.dynamo.bob.ProtoParams;
@@ -30,6 +30,7 @@ import com.dynamo.bob.util.TextureUtil;
 // Formats
 
 // BOB
+import com.dynamo.gamesys.proto.AtlasProto;
 import com.dynamo.graphics.proto.Graphics.TextureImage;
 import com.dynamo.graphics.proto.Graphics.TextureProfile;
 import com.dynamo.gamesys.proto.TextureSetProto.TextureSet; // Final engine format
@@ -45,28 +46,19 @@ import com.google.protobuf.TextFormat; // Debug
 
 @ProtoParams(srcClass = AtlasDesc.class, messageClass = AtlasDesc.class)
 @BuilderParams(name="TexturePackerAtlas", inExts=".tpatlas", outExt = ".a.texturesetc")
-public class AtlasBuilder extends Builder<Void> {
+public class AtlasBuilder extends ProtoBuilder<AtlasDesc.Builder> {
 
     static final String TEMPLATE_PATH = "texturepacker/editor/resources/templates/template.tpatlas";
 
     @Override
-    public Task<Void> create(IResource input) throws IOException, CompileExceptionError {
-
-        // Since these template files currently get compiled by bob
-        if (input.getPath().equals(TEMPLATE_PATH))
-        {
-            Task.TaskBuilder<Void> taskBuilder = Task.<Void>newBuilder(this);
-            return taskBuilder.build();
-        }
-
-        Task.TaskBuilder<Void> taskBuilder = Task.<Void>newBuilder(this)
+    public Task create(IResource input) throws IOException, CompileExceptionError {
+        Task.TaskBuilder taskBuilder = Task.newBuilder(this)
                 .setName(params.name())
                 .addInput(input)
                 .addOutput(input.changeExt(params.outExt()))
                 .addOutput(input.changeExt(".texturec"));
 
-        AtlasDesc.Builder builder = AtlasDesc.newBuilder();
-        ProtoUtil.merge(input, builder);
+        AtlasDesc.Builder builder = getSrcBuilder(input);
 
         BuilderUtil.checkResource(this.project, input, "file", builder.getFile());
 
@@ -338,13 +330,9 @@ public class AtlasBuilder extends Builder<Void> {
     }
 
     @Override
-    public void build(Task<Void> task) throws CompileExceptionError, IOException {
+    public void build(Task task) throws CompileExceptionError, IOException {
 
-        AtlasDesc.Builder builder = AtlasDesc.newBuilder();
-        ProtoUtil.merge(task.input(0), builder);
-        if (task.input(0).getPath().equals(TEMPLATE_PATH)) {
-            return;
-        }
+        AtlasDesc.Builder builder = getSrcBuilder(task.firstInput());
 
         Info.Atlas infoAtlas = Loader.load(task.input(1).getContent());
 
