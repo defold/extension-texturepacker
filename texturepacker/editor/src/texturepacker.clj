@@ -179,8 +179,12 @@
 (def ^:private TSize
   (s/pair s/Num "width" s/Num "height"))
 
+(def ^:private TPoint
+  (s/pair s/Num "x" s/Num "y"))
+
 (def ^:private TImageInfo
   {:index-count s/Int
+   :pivot TPoint
    :size TSize
    :untrimmed-size TSize
    :vertex-count s/Int})
@@ -490,12 +494,14 @@
             (into {}
                   (mapcat
                     (fn [page]
-                      (map (fn [{:keys [frame-rect indices untrimmed-size vertices] :as sprite}]
+                      (map (fn [{:keys [frame-rect indices untrimmed-size vertices pivot] :as sprite}]
                              (let [original-name (:name sprite)
                                    size [(:width frame-rect) (:height frame-rect)]
-                                   untrimmed-size [(:width untrimmed-size) (:height untrimmed-size)]]
+                                   untrimmed-size [(:width untrimmed-size) (:height untrimmed-size)]
+                                   pivot [(:x pivot) (:y pivot)]]
                                (pair original-name
-                                     {:size size
+                                     {:pivot pivot
+                                      :size size
                                       :untrimmed-size untrimmed-size
                                       :vertex-count (count vertices)
                                       :index-count (count indices)})))
@@ -607,6 +613,11 @@
                                  (properties/->choicebox (keys tpinfo-image-infos-by-original-name))))
             (dynamic error (g/fnk [_node-id original-name tpinfo-image-infos-by-original-name]
                              (validate-original-name _node-id original-name tpinfo-image-infos-by-original-name))))
+
+  (property pivot types/Vec2
+            (value (g/fnk [tpinfo-image-info] (:pivot tpinfo-image-info)))
+            (dynamic edit-type (g/constantly {:type types/Vec2 :labels ["X" "Y"]}))
+            (dynamic read-only? (g/constantly true)))
 
   (property size types/Vec2
             (value (g/fnk [tpinfo-image-info] (:size tpinfo-image-info)))
