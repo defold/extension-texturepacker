@@ -202,6 +202,8 @@ public class AtlasBuilder extends ProtoBuilder<AtlasDesc.Builder> {
         float width;
         float height;
 
+        out.setPivot(AtlasBuilder.createPoint(srcSprite.getPivot()));
+
         // For legacy reasons, the other bob code wants it already rotated
         if (rotated)
         {

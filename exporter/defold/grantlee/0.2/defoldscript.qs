@@ -73,18 +73,37 @@ var exportSprite = function(output, indentLevel, sprite)
 		field("is_solid", sprite.isSolid, indentLevel+1),
 	)
 
-	//exportPoint(output, indentLevel+1, "centerOffset", sprite.centerOffset); // don't think we need this one
 	exportPoint(output, indentLevel+1, "corner_offset", sprite.cornerOffset);
 	exportRect(output, indentLevel+1, "source_rect", sprite.sourceRect);
+	exportPoint(output, indentLevel+1, "pivot", sprite.pivotPoint);
 	exportRect(output, indentLevel+1, "frame_rect", sprite.frameRect);
 	exportSize(output, indentLevel+1, "untrimmed_size", sprite.untrimmedSize);
 
-	for (let i = 0; i < sprite.vertices.length; ++i) {
-		let vertex = sprite.vertices[i];
-		exportPoint(output, indentLevel+1, "vertices", vertex);
-	}
+	// The vertices are in sprite image coordinate space (texels)
+	// Rotation is handled later in the pipeline
+	if (sprite.vertices.length > 0)
+	{
+		for (let i = 0; i < sprite.vertices.length; ++i) {
+			let vertex = sprite.vertices[i];
+			exportPoint(output, indentLevel+1, "vertices", vertex);
+		}
 
-	exportIntArray(output, indentLevel+1, "indices", sprite.triangleIndices);
+		exportIntArray(output, indentLevel+1, "indices", sprite.triangleIndices);
+	}
+	else
+	{
+		exportIntArray(output, indentLevel+1, "indices", [1, 2, 3, 0, 1, 3]);
+
+        let x0 = sprite.sourceRect.x;
+        let y0 = sprite.sourceRect.y;
+        let x1 = x0 + sprite.sourceRect.width;
+        let y1 = y0 + sprite.sourceRect.height;
+
+    	exportPoint(output, indentLevel+1, "vertices", {x: x1, y: y0}); // TR
+		exportPoint(output, indentLevel+1, "vertices", {x: x0, y: y0}); // TL
+		exportPoint(output, indentLevel+1, "vertices", {x: x0, y: y1}); // BL
+		exportPoint(output, indentLevel+1, "vertices", {x: x1, y: y1}); // BR
+	}
 
 	output.push(indent(indentLevel) + "}");
 }
@@ -116,7 +135,7 @@ var exportAtlas = function(root)
 		""
 	);
 
-	output.push("version: \"1.1\""); 							  // our file format version
+	output.push("version: \"2.0\""); 							  // our file format version
 	output.push("description: \"Exported using TexturePacker\""); // The tool used
 
     let textures = root.allResults[root.variantIndex].textures;

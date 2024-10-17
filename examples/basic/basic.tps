@@ -4,7 +4,7 @@
         <key>fileFormatVersion</key>
         <int>6</int>
         <key>texturePackerVersion</key>
-        <string>7.1.0</string>
+        <string>7.4.0</string>
         <key>autoSDSettings</key>
         <array>
             <struct type="AutoSDSettings">
@@ -32,7 +32,7 @@
         <key>dpi</key>
         <uint>72</uint>
         <key>dataFormat</key>
-        <string>defoldexporter</string>
+        <string>defold</string>
         <key>textureFileName</key>
         <filename></filename>
         <key>flipPVR</key>
@@ -64,7 +64,7 @@
             </struct>
         </struct>
         <key>shapePadding</key>
-        <uint>1</uint>
+        <uint>0</uint>
         <key>jpgQuality</key>
         <uint>80</uint>
         <key>pngOptimizationLevel</key>
@@ -76,7 +76,7 @@
         <key>textureFormat</key>
         <enum type="SettingsBase::TextureFormat">png</enum>
         <key>borderPadding</key>
-        <uint>1</uint>
+        <uint>0</uint>
         <key>maxTextureSize</key>
         <QSize>
             <key>width</key>
@@ -161,7 +161,7 @@
             <key>trimMargin</key>
             <uint>1</uint>
             <key>trimMode</key>
-            <enum type="SpriteSettings::TrimMode">Polygon</enum>
+            <enum type="SpriteSettings::TrimMode">Trim</enum>
             <key>tracerTolerance</key>
             <int>200</int>
             <key>heuristicMask</key>
@@ -169,45 +169,13 @@
             <key>defaultPivotPoint</key>
             <point_f>0,0</point_f>
             <key>writePivotPoints</key>
-            <false/>
+            <true/>
         </struct>
         <key>individualSpriteSettings</key>
         <map type="IndividualSpriteSettingsMap">
             <key type="filename">original/anim/test-0.png</key>
             <key type="filename">original/anim/test-1.png</key>
             <key type="filename">original/anim/test-2.png</key>
-            <struct type="IndividualSpriteSettings">
-                <key>pivotPoint</key>
-                <point_f>0,0</point_f>
-                <key>spriteScale</key>
-                <double>1</double>
-                <key>scale9Enabled</key>
-                <false/>
-                <key>scale9Borders</key>
-                <rect>16,16,32,32</rect>
-                <key>scale9Paddings</key>
-                <rect>16,16,32,32</rect>
-                <key>scale9FromFile</key>
-                <false/>
-            </struct>
-            <key type="filename">original/box_fill_128.png</key>
-            <key type="filename">original/circle_fill_128.png</key>
-            <key type="filename">original/shape_L_128.png</key>
-            <key type="filename">original/triangle_fill_128.png</key>
-            <struct type="IndividualSpriteSettings">
-                <key>pivotPoint</key>
-                <point_f>0.5,0.5</point_f>
-                <key>spriteScale</key>
-                <double>1</double>
-                <key>scale9Enabled</key>
-                <false/>
-                <key>scale9Borders</key>
-                <rect>32,32,64,64</rect>
-                <key>scale9Paddings</key>
-                <rect>32,32,64,64</rect>
-                <key>scale9FromFile</key>
-                <false/>
-            </struct>
             <key type="filename">original/box_fill_64.png</key>
             <key type="filename">original/circle_fill_64.png</key>
             <key type="filename">original/triangle_fill_64.png</key>
@@ -225,10 +193,14 @@
                 <key>scale9FromFile</key>
                 <false/>
             </struct>
+            <key type="filename">original/box_fill_128.png</key>
             <key type="filename">original/box_small_128.png</key>
+            <key type="filename">original/circle_fill_128.png</key>
+            <key type="filename">original/shape_L_128.png</key>
+            <key type="filename">original/triangle_fill_128.png</key>
             <struct type="IndividualSpriteSettings">
                 <key>pivotPoint</key>
-                <point_f>0,0</point_f>
+                <point_f>0.5,0.5</point_f>
                 <key>spriteScale</key>
                 <double>1</double>
                 <key>scale9Enabled</key>
@@ -272,44 +244,6 @@
         <key>normalMapSheetFileName</key>
         <filename></filename>
         <key>exporterProperties</key>
-        <map type="ExporterProperties">
-            <key>defoldexporter::animations_flip</key>
-            <struct type="ExporterProperty">
-                <key>value</key>
-                <string></string>
-            </struct>
-            <key>defoldexporter::animations_fps</key>
-            <struct type="ExporterProperty">
-                <key>value</key>
-                <string>24</string>
-            </struct>
-            <key>defoldexporter::animations_playback</key>
-            <struct type="ExporterProperty">
-                <key>value</key>
-                <string>once_forward</string>
-            </struct>
-            <key>defoldexporter::animations_trim</key>
-            <struct type="ExporterProperty">
-                <key>value</key>
-                <string>off</string>
-            </struct>
-            <key>defoldexporter::assets_path</key>
-            <struct type="ExporterProperty">
-                <key>value</key>
-                <string>assets/{atlas_name}/{animation_name}</string>
-            </struct>
-            <key>defoldexporter::extrude_borders</key>
-            <key>defoldexporter::inner_padding</key>
-            <key>defoldexporter::margin</key>
-            <struct type="ExporterProperty">
-                <key>value</key>
-                <string>0</string>
-            </struct>
-            <key>defoldexporter::sprite-prefix</key>
-            <struct type="ExporterProperty">
-                <key>value</key>
-                <string>img_</string>
-            </struct>
-        </map>
+        <map type="ExporterProperties"/>
     </struct>
 </data>
