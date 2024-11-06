@@ -6,7 +6,6 @@ set -e
 
 PROJECT=texturepacker
 DEFAULT_SERVER=https://build-stage.defold.com
-#DEFAULT_SERVER=http://localhost:9000
 
 # 1.9.3 alpha
 DEFOLDSDK=b5ed137e64ee409ce64bcf468947385e8091f41b
@@ -26,7 +25,6 @@ echo "Using DEFOLDSDK=${DEFOLDSDK}"
 if [ "" == "${SERVER}" ]; then
     SERVER=${DEFAULT_SERVER}
 fi
-#SERVER=http://localhost:9000
 
 echo "Using SERVER=${SERVER}"
 

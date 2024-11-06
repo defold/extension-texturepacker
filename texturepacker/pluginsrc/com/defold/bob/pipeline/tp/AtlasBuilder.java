@@ -202,6 +202,18 @@ public class AtlasBuilder extends ProtoBuilder<AtlasDesc.Builder> {
         float width;
         float height;
 
+        TextureSetLayout.Point pivot;
+        if (srcSprite.hasPivot()) // backwards compatibility
+            pivot = AtlasBuilder.createPoint(srcSprite.getPivot());
+        else
+        {
+            pivot = new TextureSetLayout.Point(originalSize.getWidth() * 0.5f, originalSize.getHeight() * 0.5f);
+        }
+
+        // Transform it like a regular vertex
+        pivot.y = originalSize.getHeight() - pivot.y;
+        out.setPivot(pivot);
+
         // For legacy reasons, the other bob code wants it already rotated
         if (rotated)
         {

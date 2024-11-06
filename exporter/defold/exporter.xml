@@ -100,7 +100,7 @@
     <supportsPolygonPacking>true</supportsPolygonPacking>
 
     <!-- target framework supports pivot point settings (default=false) -->
-    <supportsPivotPoint>false</supportsPivotPoint>
+    <supportsPivotPoint>true</supportsPivotPoint>
 
     <!-- target framework accepts sprite names without file name extension. (default=false) -->
     <supportsTrimSpriteNames>false</supportsTrimSpriteNames>
@@ -133,7 +133,7 @@
         <borderPadding>0</borderPadding>
         <trimMode>Polygon</trimMode>               <!-- None, Trim, Crop, CropKeepPos, Polygon -->
         <sizeConstraints>POT</sizeConstraints>     <!-- POT, WordAligned, AnySize -->
-        <writePivotPoints>false</writePivotPoints>  <!-- true, false -->
+        <writePivotPoints>true</writePivotPoints>  <!-- true, false -->
         <defaultPivotPoint>0.5,0.5</defaultPivotPoint>
     </defaults>
 
