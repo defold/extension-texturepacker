@@ -41,11 +41,12 @@
             [schema.core :as s]
             [util.coll :refer [pair]]
             [util.digestable :as digestable])
-  (:import [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
+  (:import [com.dynamo.bob.pipeline AtlasUtil TextureGenerator$GenerateResult ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
            [com.dynamo.bob.textureset TextureSetLayout$Page TextureSetLayout$SourceImage]
+           [com.dynamo.bob.util TextureUtil]
            [com.dynamo.gamesys.proto Tile$Playback]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
-           [com.dynamo.graphics.proto Graphics$TextureImage Graphics$TextureProfile]
+           [com.dynamo.graphics.proto Graphics$TextureProfile]
            [com.jogamp.opengl GL GL2]
            [editor.gl.pass RenderPass]
            [editor.gl.vertex2 VertexBuffer]
@@ -126,8 +127,8 @@
                         [path atlas texture-path]))
 
 (defn- plugin-create-texture
-  "Creates the final texture (com.dynamo.graphics.proto.Graphics$TextureImage)."
-  ^Graphics$TextureImage [^String path is-paged buffered-images ^Graphics$TextureProfile texture-profile-pb compress]
+  "Creates the final texture (TextureGenerator$GenerateResult)."
+  ^TextureGenerator$GenerateResult [^String path is-paged buffered-images ^Graphics$TextureProfile texture-profile-pb compress]
   (plugin-invoke-static tp-plugin-cls "createTexture"
                         [String Boolean/TYPE List Graphics$TextureProfile Boolean/TYPE]
                         [path is-paged buffered-images texture-profile-pb compress]))
@@ -1043,9 +1044,10 @@
       (let [{:keys [paged-atlas texture-profile compress]} user-data
             path (resource/path resource)
             texture-profile-pb (some->> texture-profile (protobuf/map->pb Graphics$TextureProfile))
-            texture-image-pb (plugin-create-texture path paged-atlas buffered-images texture-profile-pb compress)]
+            ^TextureGenerator$GenerateResult texture-generate-result (plugin-create-texture path paged-atlas buffered-images texture-profile-pb compress)
+            texture-image-bytes (TextureUtil/generateResultToByteArray texture-generate-result)]
         {:resource resource
-         :content (protobuf/pb->bytes texture-image-pb)}))))
+         :content texture-image-bytes}))))
 
 (defn- make-texture-build-target
   [workspace node-id paged-atlas page-image-content-generators texture-profile compress]

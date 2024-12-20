@@ -13,6 +13,7 @@ import java.awt.image.BufferedImage;
 
 import com.dynamo.bob.pipeline.BuilderUtil;
 import com.dynamo.bob.pipeline.ProtoUtil;
+import com.dynamo.bob.pipeline.TextureGenerator;
 
 import com.dynamo.bob.ProtoBuilder;
 import com.dynamo.bob.BuilderParams;
@@ -406,16 +407,18 @@ public class AtlasBuilder extends ProtoBuilder<AtlasDesc.Builder> {
 
         boolean compress = project.option("texture-compression", "false").equals("true");
 
-        TextureImage texture = null;
+        TextureGenerator.GenerateResult generateResult = null;
         try {
-            texture = TextureUtil.createMultiPageTexture(textureImages, textureImageType, texProfile, compress);
+            generateResult = TextureUtil.createMultiPageTexture(textureImages, textureImageType, texProfile, compress);
         } catch (TextureGeneratorException e) {
             throw new CompileExceptionError(task.input(0), -1, e.getMessage(), e);
         }
 
+        byte[] texturePayload = TextureUtil.generateResultToByteArray(generateResult);
+
         //System.out.printf("DEBUG: %s\n", TextFormat.printToString(textureSet));
 
         task.output(0).setContent(textureSet.toByteArray());
-        task.output(1).setContent(texture.toByteArray());
+        task.output(1).setContent(texturePayload);
     }
 }
