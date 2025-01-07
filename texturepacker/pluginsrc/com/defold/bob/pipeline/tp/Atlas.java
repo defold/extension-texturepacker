@@ -27,6 +27,7 @@ import com.dynamo.bob.pipeline.tp.AtlasBuilder.MappedAnimIterator;
 import com.dynamo.bob.util.TextureUtil;
 import com.dynamo.bob.pipeline.TextureGeneratorException;
 import com.dynamo.bob.pipeline.AtlasUtil;
+import com.dynamo.bob.pipeline.TextureGenerator;
 import com.dynamo.bob.CompileExceptionError;
 
 import com.dynamo.graphics.proto.Graphics.TextureImage;
@@ -129,7 +130,7 @@ public class Atlas {
     }
 
     // Used from editor
-    static public TextureImage createTexture(String path, boolean isPaged, List<BufferedImage> textureImages, TextureProfile textureProfile, boolean compress) throws TextureGeneratorException {
+    static public TextureGenerator.GenerateResult createTexture(String path, boolean isPaged, List<BufferedImage> textureImages, TextureProfile textureProfile, boolean compress) throws TextureGeneratorException {
         TextureImage.Type textureImageType = isPaged ? TextureImage.Type.TYPE_2D_ARRAY : TextureImage.Type.TYPE_2D;
         return TextureUtil.createMultiPageTexture(textureImages, textureImageType, textureProfile, compress);
     }
