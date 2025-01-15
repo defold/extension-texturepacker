@@ -359,12 +359,12 @@
 (defn- make-gpu-texture [request-id page-image-content-generators texture-profile]
   (let [buffered-images (mapv call-content-generator page-image-content-generators)]
     (g/precluding-errors buffered-images
-      (let [texture-images
+      (let [texture-images+texture-bytes
             (mapv #(tex-gen/make-preview-texture-image % texture-profile)
                   buffered-images)]
         (texture/texture-images->gpu-texture
           request-id
-          texture-images
+          texture-images+texture-bytes
           {:min-filter gl/nearest
            :mag-filter gl/nearest})))))
 
@@ -1044,10 +1044,10 @@
       (let [{:keys [paged-atlas texture-profile compress]} user-data
             path (resource/path resource)
             texture-profile-pb (some->> texture-profile (protobuf/map->pb Graphics$TextureProfile))
-            ^TextureGenerator$GenerateResult texture-generate-result (plugin-create-texture path paged-atlas buffered-images texture-profile-pb compress)
-            texture-image-bytes (TextureUtil/generateResultToByteArray texture-generate-result)]
+            texture-generate-result (plugin-create-texture path paged-atlas buffered-images texture-profile-pb compress)]
         {:resource resource
-         :content texture-image-bytes}))))
+         :build-fn tex-gen/build-texture-resource-fn
+         :user-data {:texture-generator-result texture-generate-result}}))))
 
 (defn- make-texture-build-target
   [workspace node-id paged-atlas page-image-content-generators texture-profile compress]
