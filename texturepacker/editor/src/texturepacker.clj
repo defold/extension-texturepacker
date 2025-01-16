@@ -1046,7 +1046,7 @@
             texture-profile-pb (some->> texture-profile (protobuf/map->pb Graphics$TextureProfile))
             texture-generate-result (plugin-create-texture path paged-atlas buffered-images texture-profile-pb compress)]
         {:resource resource
-         :build-fn tex-gen/build-texture-resource-fn
+         :write-content-fn tex-gen/write-texturec-content-fn
          :user-data {:texture-generator-result texture-generate-result}}))))
 
 (defn- make-texture-build-target
