@@ -37,9 +37,6 @@ jobs:
           wget -q http://d.defold.com/archive/${{env.CHANNEL}}/${{env.DEFOLD_VERSION}}/bob/bob.jar
           java -jar bob.jar --version
 
-      - name: Cleanup test content
-        run: rm ./examples/broken/broken.tpatlas ./examples/broken/missing_image.tpinfo
-
       - name: Resolve libraries
         run: java -jar bob.jar resolve --email a@b.com --auth 123456
       - name: Build Tools
@@ -75,11 +72,6 @@ jobs:
         run: |
           curl -s -o bob.jar http://d.defold.com/archive/${{env.CHANNEL}}/${{env.DEFOLD_VERSION}}/bob/bob.jar
           java -jar bob.jar --version
-
-      - name: Cleanup test content
-        run: |
-          del .\examples\broken\broken.tpatlas
-          del .\examples\broken\missing_image.tpinfo
 
       - name: Resolve libraries
         run: java -jar bob.jar resolve --email a@b.com --auth 123456
