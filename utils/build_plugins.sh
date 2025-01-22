@@ -7,9 +7,8 @@ set -e
 PROJECT=texturepacker
 DEFAULT_SERVER=https://build-stage.defold.com
 
-# 1.9.7 compatible
-# Branch: https://github.com/defold/defold/tree/refs/heads/issue-9605-append-texture-data-after-protobuf
-DEFOLDSDK=e0bde70f7489f4e5022b4f3fd69b3a26176d7df6
+# 1.9.7 beta compatible
+DEFOLDSDK=64df121ee4aecbbffbd5c7dcb7197d7186d3feb6
 
 if [ "" == "${BOB}" ]; then
     BOB=${DYNAMO_HOME}/share/java/bob.jar

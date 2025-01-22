@@ -414,11 +414,9 @@ public class AtlasBuilder extends ProtoBuilder<AtlasDesc.Builder> {
             throw new CompileExceptionError(task.input(0), -1, e.getMessage(), e);
         }
 
-        byte[] texturePayload = TextureUtil.generateResultToByteArray(generateResult);
-
         //System.out.printf("DEBUG: %s\n", TextFormat.printToString(textureSet));
 
         task.output(0).setContent(textureSet.toByteArray());
-        task.output(1).setContent(texturePayload);
+        TextureUtil.writeGenerateResultToResource(generateResult, task.output(1));
     }
 }
