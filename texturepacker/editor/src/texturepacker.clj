@@ -498,8 +498,8 @@
                       (map (fn [{:keys [frame-rect indices untrimmed-size vertices pivot] :as sprite}]
                              (let [original-name (:name sprite)
                                    size [(:width frame-rect) (:height frame-rect)]
-                                   width (:width untrimmed-size)
-                                   height (:height untrimmed-size)
+                                   width (double (:width untrimmed-size))
+                                   height (double (:height untrimmed-size))
                                    untrimmed-size [width height]
                                    pivot (if pivot
                                           [(:x pivot) (:y pivot)]
