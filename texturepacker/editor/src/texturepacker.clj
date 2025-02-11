@@ -41,9 +41,8 @@
             [schema.core :as s]
             [util.coll :refer [pair]]
             [util.digestable :as digestable])
-  (:import [com.dynamo.bob.pipeline AtlasUtil TextureGenerator$GenerateResult ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback]
+  (:import [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback TextureGenerator$GenerateResult]
            [com.dynamo.bob.textureset TextureSetLayout$Page TextureSetLayout$SourceImage]
-           [com.dynamo.bob.util TextureUtil]
            [com.dynamo.gamesys.proto Tile$Playback]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
            [com.dynamo.graphics.proto Graphics$TextureProfile]
@@ -217,7 +216,7 @@
         v2 (vector-of :float x1 y1 0.0 1.0 1.0 1.0 page-index)
         v3 (vector-of :float x1 y0 0.0 1.0 1.0 0.0 page-index)
         ^VertexBuffer vbuf (->texture-vtx 6)
-        ^ByteBuffer buf (.buf vbuf)]
+        buf (.buf vbuf)]
     (doto buf
       (vtx/buf-push-floats! v0)
       (vtx/buf-push-floats! v1)
