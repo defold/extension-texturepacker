@@ -46,7 +46,7 @@ import com.dynamo.texturepacker.proto.Atlas.AtlasAnimation; // A flipbook animat
 import com.google.protobuf.TextFormat; // Debug
 
 @ProtoParams(srcClass = AtlasDesc.class, messageClass = AtlasDesc.class)
-@BuilderParams(name="TexturePackerAtlas", inExts=".tpatlas", outExt = ".a.texturesetc")
+@BuilderParams(name="TexturePackerAtlas", inExts=".tpatlas", outExt = ".a.texturesetc", isCacheble = true, paramsForSignature = {"texture-compression"})
 public class AtlasBuilder extends ProtoBuilder<AtlasDesc.Builder> {
 
     static final String TEMPLATE_PATH = "texturepacker/editor/resources/templates/template.tpatlas";
@@ -74,12 +74,8 @@ public class AtlasBuilder extends ProtoBuilder<AtlasDesc.Builder> {
             taskBuilder.addInput(r);
         }
 
-        // If there is a texture profiles file, we need to make sure
-        // it has been read before building this tile set, add it as an input.
-        String textureProfilesPath = this.project.getProjectProperties().getStringValue("graphics", "texture_profiles");
-        if (textureProfilesPath != null) {
-            taskBuilder.addInput(this.project.getResource(textureProfilesPath));
-        }
+        TextureUtil.addTextureProfileInput(taskBuilder, this.project);
+
         return taskBuilder.build();
     }
 
@@ -396,7 +392,7 @@ public class AtlasBuilder extends ProtoBuilder<AtlasDesc.Builder> {
                                                 .setTexture(texturePath)
                                                 .build();
 
-        TextureProfile texProfile = TextureUtil.getTextureProfileByPath(this.project.getTextureProfiles(), task.input(0).getPath());
+        TextureProfile texProfile = TextureUtil.getTextureProfileByPath(task.lastInput(), task.input(0).getPath());
 
         List<IResource> imageResources = new ArrayList<>();
         for (Info.Page page : infoAtlas.getPagesList()) {
