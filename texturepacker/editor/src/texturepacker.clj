@@ -1268,7 +1268,7 @@
         (g/operation-sequence op-seq)
         (app-view/select app-view [animation-node])))))
 
-(handler/defhandler :add :workbench
+(handler/defhandler :edit.add-embedded-component :workbench
   (label [] "Add Animation")
   (active? [selection] (selection->atlas selection))
   (run [app-view selection] (add-animation-group-handler app-view (selection->atlas selection))))
@@ -1301,7 +1301,7 @@
             (g/operation-sequence op-seq)
             (app-view/select app-view image-nodes)))))))
 
-(handler/defhandler :add-from-file :workbench
+(handler/defhandler :edit.add-referenced-component :workbench
   (label [] "Add Animation Frames...")
   (active? [selection] (selection->animation selection))
   (run [app-view project selection workspace]
@@ -1358,12 +1358,12 @@
         animation-image-index (.indexOf animation-image-node-ids image-node-id)]
     (<= 0 (+ animation-image-index offset) (dec (.size animation-image-node-ids)))))
 
-(handler/defhandler :move-up :workbench
+(handler/defhandler :edit.reorder-up :workbench
   (active? [selection evaluation-context] (move-active? selection evaluation-context))
   (enabled? [selection evaluation-context] (move-enabled? selection -1 evaluation-context))
   (run [selection] (move-animation-image! selection -1)))
 
-(handler/defhandler :move-down :workbench
+(handler/defhandler :edit.reorder-down :workbench
   (active? [selection evaluation-context] (move-active? selection evaluation-context))
   (enabled? [selection evaluation-context] (move-enabled? selection 1 evaluation-context))
   (run [selection] (move-animation-image! selection 1)))
