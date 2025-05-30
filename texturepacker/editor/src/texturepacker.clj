@@ -18,9 +18,7 @@
             [editor.geom :as geom]
             [editor.gl :as gl]
             [editor.gl.pass :as pass]
-            [editor.gl.shader :as shader]
             [editor.gl.texture :as texture]
-            [editor.gl.vertex2 :as vtx]
             [editor.graph-util :as gu]
             [editor.handler :as handler]
             [editor.localization :as localization]
@@ -29,7 +27,7 @@
             [editor.pipeline.tex-gen :as tex-gen]
             [editor.properties :as properties]
             [editor.protobuf :as protobuf]
-            [editor.render :as render]
+            [editor.render-util :as render-util]
             [editor.resource :as resource]
             [editor.resource-dialog :as resource-dialog]
             [editor.resource-node :as resource-node]
@@ -44,14 +42,13 @@
             [schema.core :as s]
             [util.coll :refer [pair]]
             [util.digestable :as digestable])
-  (:import [com.dynamo.bob.pipeline AtlasUtil ShaderUtil$Common ShaderUtil$VariantTextureArrayFallback TextureGenerator$GenerateResult]
+  (:import [com.dynamo.bob.pipeline AtlasUtil TextureGenerator$GenerateResult]
            [com.dynamo.bob.textureset TextureSetLayout$Page TextureSetLayout$SourceImage]
            [com.dynamo.gamesys.proto Tile$Playback]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
            [com.dynamo.graphics.proto Graphics$TextureProfile]
-           [com.jogamp.opengl GL GL2]
+           [com.jogamp.opengl GL2]
            [editor.gl.pass RenderPass]
-           [editor.gl.vertex2 VertexBuffer]
            [editor.types AABB]
            [java.io File]
            [java.lang IllegalArgumentException]
@@ -204,103 +201,12 @@
 (g/deftype ^:private SceneUpdatable TSceneUpdatable)
 (g/deftype ^:private SceneVec [TScene])
 
-(vtx/defvertex texture-vtx
-  (vec4 position)
-  (vec2 texcoord0)
-  (vec1 page_index))
-
-(defn- make-page-rect-vertex-buffer [^double width ^double height ^long page-index]
-  (let [x0 0.0
-        y0 0.0
-        x1 width
-        y1 height
-        v0 (vector-of :float x0 y0 0.0 1.0 0.0 0.0 page-index)
-        v1 (vector-of :float x0 y1 0.0 1.0 0.0 1.0 page-index)
-        v2 (vector-of :float x1 y1 0.0 1.0 1.0 1.0 page-index)
-        v3 (vector-of :float x1 y0 0.0 1.0 1.0 0.0 page-index)
-        ^VertexBuffer vbuf (->texture-vtx 6)
-        buf (.buf vbuf)]
-    (doto buf
-      (vtx/buf-push-floats! v0)
-      (vtx/buf-push-floats! v1)
-      (vtx/buf-push-floats! v2)
-      (vtx/buf-push-floats! v2)
-      (vtx/buf-push-floats! v3)
-      (vtx/buf-push-floats! v0))
-    (vtx/flip! vbuf)))
-
-(defn- array-sampler-name->uniform-names [array-sampler-uniform-name page-count]
-  (mapv #(str array-sampler-uniform-name "_" %) (range page-count)))
-
-(shader/defshader pos-uv-vert
-  (uniform mat4 world_view_proj_matrix)
-  (attribute vec4 position)
-  (attribute vec2 texcoord0)
-  (attribute float page_index)
-  (varying vec2 var_texcoord0)
-  (varying float var_page_index)
-  (defn void main []
-    (setq gl_Position (* world_view_proj_matrix position))
-    (setq var_texcoord0 texcoord0)
-    (setq var_page_index page_index)))
-
-(shader/defshader pos-uv-frag
-  (varying vec2 var_texcoord0)
-  (varying float var_page_index)
-  (uniform sampler2DArray texture_sampler)
-  (defn void main []
-    (setq gl_FragColor (texture2DArray texture_sampler (vec3 var_texcoord0 var_page_index)))))
-
-(def ^:private atlas-shader
-  (let [transformed-shader-result (ShaderUtil$VariantTextureArrayFallback/transform pos-uv-frag ShaderUtil$Common/MAX_ARRAY_SAMPLERS)
-        augmented-fragment-source (.source transformed-shader-result)
-        uniforms {"world_view_proj_matrix" :world-view-proj}
-        array-sampler-names (vec (.arraySamplers transformed-shader-result))
-        array-sampler-uniform-names (into {}
-                                          (map (fn [item] [item (array-sampler-name->uniform-names item ShaderUtil$Common/MAX_ARRAY_SAMPLERS)])
-                                               array-sampler-names))]
-    (shader/make-shader ::atlas-shader pos-uv-vert augmented-fragment-source uniforms array-sampler-uniform-names)))
-
-(defn- render-page-image
-  [^GL2 gl render-args [renderable] _renderable-count]
-  (let [{:keys [pass]} render-args]
-    (condp = pass
-      pass/transparent
-      (let [{:keys [user-data]} renderable
-            {:keys [vbuf]} user-data
-            gpu-texture (or (get user-data :gpu-texture) @texture/white-pixel)
-            vertex-binding (vtx/use-with ::atlas-binding vbuf atlas-shader)]
-        (gl/with-gl-bindings gl render-args [atlas-shader vertex-binding gpu-texture]
-          (shader/set-samplers-by-index atlas-shader gl 0 (:texture-units gpu-texture))
-          (gl/gl-draw-arrays gl GL/GL_TRIANGLES 0 6))))))
-
-(defn- render-page-outline
-  [^GL2 gl render-args renderables renderable-count]
-  (let [{:keys [pass]} render-args]
-    (condp = pass
-      pass/outline
-      (let [renderable (first renderables)
-            node-id (:node-id renderable)]
-        (render/render-aabb-outline gl render-args [node-id ::outline] renderables renderable-count)))))
-
 (defn- make-page-scene [^TextureSetLayout$Page layout-page ^Matrix4d page-offset-transform gpu-texture]
   (let [layout-size (.size layout-page)
         page-index (.index layout-page)
         page-width (.width layout-size)
-        page-height (.height layout-size)
-        aabb (types/->AABB (Point3d. 0.0 0.0 0.0)
-                           (Point3d. page-width page-height 0.0))]
-    {:aabb aabb
-     :transform page-offset-transform
-     :renderable {:render-fn render-page-image
-                  :user-data {:gpu-texture gpu-texture
-                              :vbuf (make-page-rect-vertex-buffer page-width page-height page-index)}
-                  :tags #{:atlas}
-                  :passes [pass/transparent]}
-     :children [{:aabb aabb
-                 :renderable {:render-fn render-page-outline
-                              :tags #{:atlas :outline}
-                              :passes [pass/outline]}}]}))
+        page-height (.height layout-size)]
+    (render-util/make-outlined-textured-quad-scene #{:atlas} page-offset-transform page-width page-height gpu-texture page-index)))
 
 (defn- scene-info-text
   ([resource-type-label ^long page-count page-size]
@@ -854,8 +760,8 @@
                     original-name)
                   image-node-id+original-names)))
 
-(defn- render-animation [^GL2 gl render-args renderables n]
-  (texture-set/render-animation-overlay gl render-args renderables n ->texture-vtx atlas-shader))
+(defn- render-animation [^GL2 gl render-args renderables _renderable-count]
+  (texture-set/render-animation-overlay gl render-args renderables))
 
 (g/defnk produce-animation-updatable [_node-id id anim-data]
   (texture-set/make-animation-updatable _node-id "Atlas Animation" (get anim-data id)))
