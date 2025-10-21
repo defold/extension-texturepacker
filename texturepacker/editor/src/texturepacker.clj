@@ -23,6 +23,7 @@
             [editor.gl.vertex2 :as vtx]
             [editor.graph-util :as gu]
             [editor.handler :as handler]
+            [editor.localization :as localization]
             [editor.outline :as outline]
             [editor.pipeline :as pipeline]
             [editor.pipeline.tex-gen :as tex-gen]
@@ -30,10 +31,12 @@
             [editor.protobuf :as protobuf]
             [editor.render :as render]
             [editor.resource :as resource]
+            [editor.resource-dialog :as resource-dialog]
             [editor.resource-node :as resource-node]
             [editor.scene-picking :as scene-picking]
             [editor.texture-set :as texture-set]
             [editor.types :as types]
+            [editor.ui.fuzzy-choices :as fuzzy-choices]
             [editor.util :as util]
             [editor.validation :as validation]
             [editor.workspace :as workspace]
@@ -769,9 +772,8 @@
               pages)]
 
     (concat
-      (g/set-property self
-        :tpinfo tpinfo
-        :layout-pages layout-pages)
+      (g/set-property self :tpinfo tpinfo)
+      (g/set-property self :layout-pages layout-pages)
       (mapcat
         (fn [page-image-resource layout-page]
           (add-page-node-to-tpinfo-node self page-image-resource layout-page))
@@ -1261,7 +1263,7 @@
                            (g/transact
                              (concat
                                (g/operation-sequence op-seq)
-                               (g/operation-label "Add Animation")
+                               (g/operation-label (localization/message "operation.atlas.add-animation"))
                                (add-atlas-animation-node atlas-node default-animation))))]
     (g/transact
       (concat
@@ -1269,33 +1271,57 @@
         (app-view/select app-view [animation-node])))))
 
 (handler/defhandler :edit.add-embedded-component :workbench
-  (label [] "Add Animation")
+  :label (localization/message "command.edit.add-embedded-component.variant.atlas")
   (active? [selection] (selection->atlas selection))
   (run [app-view selection] (add-animation-group-handler app-view (selection->atlas selection))))
 
-(defn- add-images-handler [app-view animation-node]
-  {:pre [(g/node-instance? AtlasAnimationNode animation-node)]}
-  (let [ui-items
-        (->> (g/node-value animation-node :tpinfo-image-infos-by-original-name)
-             (keys)
+(defn- add-images-dialog-filter-fn [filter-text unfiltered-options]
+  (fuzzy-choices/filter-options :original-name :original-name filter-text unfiltered-options))
+
+(defn- add-images-dialog-cell-fn [option _localization]
+  (let [matching-indices (:matching-indices (meta option))]
+    {:graphic {:fx/type resource-dialog/matched-list-item-view
+               :icon image-icon
+               :text (:original-name option)
+               :matching-indices matching-indices}}))
+
+(def ^:private add-images-dialog-opts
+  {:title "Select Animation Frames"
+   :ok-label "Add Animation Frames"
+   :selection :multiple
+   :filter-fn add-images-dialog-filter-fn
+   :cell-fn add-images-dialog-cell-fn})
+
+(defn- show-add-images-dialog! [original-names localization]
+  (let [options
+        (->> original-names
              (sort util/natural-order)
              (mapv (fn [original-name]
-                     {:text original-name})))]
-    (when-some [selected-ui-items
-                (not-empty
-                  (dialogs/make-select-list-dialog
-                    ui-items
-                    {:title "Select Animation Frames"
-                     :selection :multiple
-                     :ok-label "Add Animation Frames"}))]
+                     ;; We want to feed something that supports metadata into
+                     ;; the :filter-fn so it can decorate the matched options
+                     ;; with :matching-indices metadata.
+                     {:original-name original-name})))
+
+        selected-options
+        (dialogs/make-select-list-dialog options localization add-images-dialog-opts)]
+
+    (when (seq selected-options)
+      (mapv :original-name selected-options))))
+
+(defn- add-images-handler [app-view localization animation-node]
+  {:pre [(g/node-instance? AtlasAnimationNode animation-node)]}
+  (when-some [original-names (some-> animation-node
+                                     (g/maybe-node-value :tpinfo-image-infos-by-original-name)
+                                     (keys)
+                                     (not-empty))]
+    (when-some [selected-original-names (show-add-images-dialog! original-names localization)]
       (let [op-seq (gensym)
-            original-names (mapv :text selected-ui-items)
             image-nodes (g/tx-nodes-added
                           (g/transact
                             (concat
                               (g/operation-sequence op-seq)
-                              (g/operation-label "Add Images")
-                              (add-image-nodes-to-animation-node animation-node original-names))))]
+                              (g/operation-label "Add Animation Frames")
+                              (add-image-nodes-to-animation-node animation-node selected-original-names))))]
         (g/transact
           (concat
             (g/operation-sequence op-seq)
@@ -1304,9 +1330,9 @@
 (handler/defhandler :edit.add-referenced-component :workbench
   (label [] "Add Animation Frames...")
   (active? [selection] (selection->animation selection))
-  (run [app-view project selection workspace]
+  (run [app-view localization project selection workspace]
        (when-some [animation-node (selection->animation selection)]
-         (add-images-handler app-view animation-node))))
+         (add-images-handler app-view localization animation-node))))
 
 (defn- vec-move
   ^List [^List vector item ^long offset]
