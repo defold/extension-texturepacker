@@ -33,6 +33,7 @@
             [editor.resource-node :as resource-node]
             [editor.scene-picking :as scene-picking]
             [editor.texture-set :as texture-set]
+            [editor.texture-util :as texture-util]
             [editor.types :as types]
             [editor.ui.fuzzy-choices :as fuzzy-choices]
             [editor.util :as util]
@@ -40,8 +41,7 @@
             [editor.workspace :as workspace]
             [internal.java :as java]
             [schema.core :as s]
-            [util.coll :refer [pair]]
-            [util.digestable :as digestable])
+            [util.coll :refer [pair]])
   (:import [com.dynamo.bob.pipeline AtlasUtil TextureGenerator$GenerateResult]
            [com.dynamo.bob.textureset TextureSetLayout$Page TextureSetLayout$SourceImage]
            [com.dynamo.gamesys.proto Tile$Playback]
@@ -255,26 +255,10 @@
 (defn- tpinfo->size-vec2 [tpinfo]
   (some-> tpinfo :pages first :size size->vec2))
 
-(defn- content-generator? [value]
-  (and (map? value)
-       (ifn? (:f value))
-       (map? (:args value))
-       (digestable/sha1-hash? (:sha1 value))))
-
-(defn- call-content-generator [content-generator]
-  ((:f content-generator) (:args content-generator)))
-
 (defn- make-gpu-texture [request-id page-image-content-generators texture-profile]
-  (let [buffered-images (mapv call-content-generator page-image-content-generators)]
-    (g/precluding-errors buffered-images
-      (let [texture-images+texture-bytes
-            (mapv #(tex-gen/make-preview-texture-image % texture-profile)
-                  buffered-images)]
-        (texture/texture-images->gpu-texture
-          request-id
-          texture-images+texture-bytes
-          {:min-filter gl/nearest
-           :mag-filter gl/nearest})))))
+  (-> (texture-util/construct-gpu-texture request-id page-image-content-generators texture-profile)
+      (texture/set-params {:min-filter gl/nearest
+                           :mag-filter gl/nearest})))
 
 (defn- render-image-geometry [^GL2 gl world-positions color]
   (let [[^double cr ^double cg ^double cb ^double ca] color]
@@ -946,22 +930,22 @@
 
 (defn- build-texture [resource _dep-resources user-data]
   (let [{:keys [page-image-content-generators]} user-data
-        buffered-images (mapv call-content-generator page-image-content-generators)]
+        buffered-images (mapv texture-util/call-generator page-image-content-generators)]
     (g/precluding-errors buffered-images
       (let [{:keys [paged-atlas texture-profile compress]} user-data
             path (resource/path resource)
             texture-profile-pb (some->> texture-profile (protobuf/map->pb Graphics$TextureProfile))
-            texture-generate-result (plugin-create-texture path paged-atlas buffered-images texture-profile-pb compress)]
+            texture-generator-result (plugin-create-texture path paged-atlas buffered-images texture-profile-pb compress)]
         {:resource resource
          :write-content-fn tex-gen/write-texturec-content-fn
-         :user-data {:texture-generator-result texture-generate-result}}))))
+         :user-data {:texture-generator-result texture-generator-result}}))))
 
 (defn- make-texture-build-target
   [workspace node-id paged-atlas page-image-content-generators texture-profile compress]
   {:pre [(g/node-id? node-id)
          (boolean? paged-atlas)
          (coll? page-image-content-generators) ; Content generators for the page images: page-0.png, page-1.png etc
-         (every? content-generator? page-image-content-generators)
+         (every? texture-util/content-generator? page-image-content-generators)
          (or (nil? texture-profile) (map? texture-profile))
          (boolean? compress)]}
   (let [texture-type (workspace/get-resource-type workspace "texture")
