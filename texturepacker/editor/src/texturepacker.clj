@@ -1138,9 +1138,9 @@
 ;; *****************************************************************************
 ;; Outline handlers
 
-(defn- selection->atlas [selection] (handler/adapt-single selection TPAtlasNode))
-(defn- selection->animation [selection] (handler/adapt-single selection AtlasAnimationNode))
-(defn- selection->image [selection] (handler/adapt-single selection AtlasImageNode))
+(defn- selection->atlas [selection evaluation-context] (handler/adapt-single selection TPAtlasNode evaluation-context))
+(defn- selection->animation [selection evaluation-context] (handler/adapt-single selection AtlasAnimationNode evaluation-context))
+(defn- selection->image [selection evaluation-context] (handler/adapt-single selection AtlasImageNode evaluation-context))
 
 (defn- image->owning-animation [basis image-node-id]
   (when-some [owner-node-id (ffirst (g/targets-of basis image-node-id :node-id+original-name))]
@@ -1162,8 +1162,10 @@
 
 (handler/defhandler :edit.add-embedded-component :workbench
   :label (localization/message "command.edit.add-embedded-component.variant.atlas")
-  (active? [selection] (selection->atlas selection))
-  (run [app-view selection] (add-animation-group-handler app-view (selection->atlas selection))))
+  (active? [selection evaluation-context] (selection->atlas selection evaluation-context))
+  (run [app-view selection]
+    (g/let-ec [atlas-node (selection->atlas selection evaluation-context)]
+      (add-animation-group-handler app-view atlas-node))))
 
 (defn- add-images-dialog-filter-fn [filter-text unfiltered-options]
   (fuzzy-choices/filter-options :original-name :original-name filter-text unfiltered-options))
@@ -1219,10 +1221,11 @@
 
 (handler/defhandler :edit.add-referenced-component :workbench
   (label [] "Add Animation Frames...")
-  (active? [selection] (selection->animation selection))
+  (active? [selection evaluation-context] (selection->animation selection evaluation-context))
   (run [app-view localization project selection workspace]
-       (when-some [animation-node (selection->animation selection)]
-         (add-images-handler app-view localization animation-node))))
+    (g/let-ec [animation-node (selection->animation selection evaluation-context)]
+      (when animation-node
+        (add-images-handler app-view localization animation-node)))))
 
 (defn- vec-move
   ^List [^List vector item ^long offset]
@@ -1258,17 +1261,17 @@
          (g/node-value animation-node-id :image-node-id+original-names evaluation-context))))
 
 (defn- move-animation-image! [selection ^long offset]
-  (let [image-node-id (selection->image selection)
-        animation-node-id (image->owning-animation (g/now) image-node-id)]
+  (g/let-ec [basis (:basis evaluation-context)
+             image-node-id (selection->image selection evaluation-context)
+             animation-node-id (image->owning-animation basis image-node-id)]
     (move-node! animation-node-id image-node-id animation->image-node-ids offset)))
 
-(defn- move-active? [selection {:keys [basis] :as _evaluation-context}]
-  (some->> selection
-           (selection->image)
+(defn- move-active? [selection {:keys [basis] :as evaluation-context}]
+  (some->> (selection->image selection evaluation-context)
            (image->owning-animation basis)))
 
 (defn- move-enabled? [selection ^long offset {:keys [basis] :as evaluation-context}]
-  (let [image-node-id (selection->image selection)
+  (let [image-node-id (selection->image selection evaluation-context)
         animation-node-id (image->owning-animation basis image-node-id)
         animation-image-node-ids (animation->image-node-ids animation-node-id evaluation-context)
         animation-image-index (.indexOf animation-image-node-ids image-node-id)]
