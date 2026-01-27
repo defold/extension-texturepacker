@@ -1297,6 +1297,7 @@
       :node-type TPInfoNode
       :load-fn load-tpinfo-file
       :icon tpinfo-icon
+      :category (localization/message "resource.category.resources")
       :ddf-type tpinfo-pb-cls
       :view-types [:scene :text]
       :view-opts {:scene {:grid true}})
@@ -1308,6 +1309,7 @@
       :ddf-type tpatlas-pb-cls
       :load-fn load-tpatlas-file
       :icon tpatlas-icon
+      :category (localization/message "resource.category.resources")
       :view-types [:scene :text]
       :view-opts {:scene {:grid true}}
       :template "/texturepacker/editor/resources/templates/template.tpatlas")))
