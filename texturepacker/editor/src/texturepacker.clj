@@ -25,6 +25,7 @@
             [editor.outline :as outline]
             [editor.pipeline :as pipeline]
             [editor.pipeline.tex-gen :as tex-gen]
+            [editor.pose :as pose]
             [editor.properties :as properties]
             [editor.protobuf :as protobuf]
             [editor.render-util :as render-util]
@@ -48,13 +49,12 @@
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
            [com.dynamo.graphics.proto Graphics$TextureProfile]
            [com.jogamp.opengl GL2]
-           [editor.gl.pass RenderPass]
-           [editor.types AABB]
+           [editor.pose Pose]
            [java.io File]
            [java.lang IllegalArgumentException]
            [java.lang.reflect Method]
            [java.util List]
-           [javax.vecmath Matrix4d Point3d Vector3d]))
+           [javax.vecmath Point3d]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -145,30 +145,6 @@
 (def ^:private TOriginalName (s/named s/Str "original-name"))
 (def ^:private TPageImageName (s/named s/Str "page-image-name"))
 
-(def ^:private TSceneRenderable
-  {:passes [RenderPass]
-   :render-fn (s/pred fn?)
-   (s/optional-key :batch-key) s/Any
-   (s/optional-key :select-batch-key) s/Any
-   (s/optional-key :tags) #{s/Keyword}
-   (s/optional-key :topmost?) s/Bool
-   (s/optional-key :user-data) s/Any})
-
-(def ^:private TSceneUpdatable
-  {:initial-state s/Any
-   :update-fn (s/pred fn?)
-   (s/optional-key :name) s/Str
-   (s/optional-key :node-id) TNodeID})
-
-(def ^:private TScene
-  {(s/optional-key :aabb) AABB
-   (s/optional-key :children) [(s/recursive #'TScene)]
-   (s/optional-key :info-text) s/Str
-   (s/optional-key :node-id) TNodeID
-   (s/optional-key :renderable) TSceneRenderable
-   (s/optional-key :transform) Matrix4d
-   (s/optional-key :updatable) (s/maybe TSceneUpdatable)})
-
 (def ^:private TNodeID+OriginalName
   (s/pair TNodeID "node-id" TOriginalName "original-name"))
 
@@ -194,19 +170,16 @@
 (g/deftype ^:private LayoutPageVec [TextureSetLayout$Page])
 (g/deftype ^:private NodeID+OriginalName TNodeID+OriginalName)
 (g/deftype ^:private OriginalName->ImageInfo {TOriginalName TImageInfo})
-(g/deftype ^:private OriginalName->Scene {TOriginalName TScene})
+(g/deftype ^:private OriginalName->Scene {TOriginalName types/TScene})
 (g/deftype ^:private PageImageName TPageImageName)
 (g/deftype ^:private PageInfo TPageInfo)
-(g/deftype ^:private Scene TScene)
-(g/deftype ^:private SceneUpdatable TSceneUpdatable)
-(g/deftype ^:private SceneVec [TScene])
 
-(defn- make-page-scene [^TextureSetLayout$Page layout-page ^Matrix4d page-offset-transform gpu-texture]
+(defn- make-page-scene [^TextureSetLayout$Page layout-page page-offset-pose gpu-texture]
   (let [layout-size (.size layout-page)
         page-index (.index layout-page)
         page-width (.width layout-size)
         page-height (.height layout-size)]
-    (render-util/make-outlined-textured-quad-scene #{:atlas} page-offset-transform page-width page-height gpu-texture page-index)))
+    (render-util/make-outlined-textured-quad-scene #{:atlas} page-offset-pose page-width page-height gpu-texture page-index)))
 
 (defn- scene-info-text
   ([resource-type-label ^long page-count page-size]
@@ -218,11 +191,11 @@
    (let [basic-info-text (scene-info-text resource-label page-count page-size)]
      (format "%s (%s profile)" basic-info-text (or texture-profile-name "no")))))
 
-(g/defnk produce-tpinfo-scene [_node-id gpu-texture image-scenes-by-original-name layout-pages page-offset-transforms size]
+(g/defnk produce-tpinfo-scene [_node-id gpu-texture image-scenes-by-original-name layout-pages page-offset-poses size]
   (let [info-text (scene-info-text tpinfo-resource-label (count layout-pages) size)
         page-scenes (mapv #(make-page-scene %1 %2 gpu-texture)
                           layout-pages
-                          page-offset-transforms)]
+                          page-offset-poses)]
     {:info-text info-text
      :children (into page-scenes
                      (map val)
@@ -311,11 +284,12 @@
 (defn- point->vec3 [^Point3d point]
   (vector-of :double (.x point) (.y point) (.z point)))
 
-(defn- make-image-scene [image-node-id ^TextureSetLayout$SourceImage source-image ^TextureSetLayout$Page layout-page page-offset-transforms]
+(defn- make-image-scene [image-node-id ^TextureSetLayout$SourceImage source-image ^TextureSetLayout$Page layout-page page-offset-poses]
   (let [page-size (.size layout-page)
         page-height (.height page-size)
         page-index (.index layout-page)
-        ^Matrix4d page-offset-transform (page-offset-transforms page-index)
+        page-offset-pose (page-offset-poses page-index)
+        page-offset-transform (pose/matrix page-offset-pose)
         interleaved-xys (plugin-source-image-triangle-vertices source-image page-height)
 
         ;; We calculate the AABB from the vertex positions because the rect of
@@ -405,7 +379,7 @@
                            (:sprites page))))
                   (:pages tpinfo))))
 
-  (output page-offset-transforms [Matrix4d] :cached
+  (output page-offset-poses [Pose] :cached
           (g/fnk [layout-pages]
             (if (zero? (count layout-pages))
               []
@@ -418,12 +392,10 @@
                                    (+ prev-page-offset page-spacing page-width)))
                                0.0)
                    (mapv (fn [^double page-offset-x]
-                           (doto (Matrix4d.)
-                             (.setIdentity)
-                             (.setTranslation (Vector3d. page-offset-x 0.0 0.0)))))))))
+                           (pose/translation-pose page-offset-x 0.0 0.0)))))))
 
   (output image-scenes-by-original-name OriginalName->Scene :cached
-          (g/fnk [layout-pages page-infos page-offset-transforms]
+          (g/fnk [layout-pages page-infos page-offset-poses]
             (let [original-name->image-node-id
                   (into {}
                         (comp (mapcat :image-node-id+original-names)
@@ -437,7 +409,7 @@
                         (map (fn [^TextureSetLayout$SourceImage source-image]
                                (let [original-name (.name source-image)
                                      image-node-id (original-name->image-node-id original-name)
-                                     scene (make-image-scene image-node-id source-image layout-page page-offset-transforms)]
+                                     scene (make-image-scene image-node-id source-image layout-page page-offset-poses)]
                                  (pair original-name scene)))
                              (.images layout-page))))
                     layout-pages))))
@@ -454,7 +426,7 @@
           (g/fnk [_node-id page-image-content-generators]
             (make-gpu-texture _node-id page-image-content-generators nil)))
 
-  (output scene Scene :cached produce-tpinfo-scene)
+  (output scene types/Scene :cached produce-tpinfo-scene)
 
   (output build-errors g/Any
           (g/fnk [_node-id page-build-errors]
@@ -787,7 +759,7 @@
   (input anim-data g/Any)
   (input gpu-texture g/Any)
 
-  (output image-scenes SceneVec :cached
+  (output image-scenes types/SceneVec :cached
           (g/fnk [tpinfo-image-scenes-by-original-name image-node-id+original-names updatable]
             ;; The animation includes copies of the referenced tpinfo image
             ;; scenes so that animation images can be highlighted and selected.
@@ -831,8 +803,8 @@
              :children image-outlines}))
 
   (output save-value g/Any :cached produce-animation-save-value)
-  (output updatable SceneUpdatable :cached produce-animation-updatable)
-  (output scene Scene :cached produce-animation-scene)
+  (output updatable types/SceneUpdatable :cached produce-animation-updatable)
+  (output scene types/Scene :cached produce-animation-scene)
 
   (output own-build-errors g/Any
           (g/fnk [_node-id fps id id-counts]
@@ -1043,7 +1015,7 @@
 
   (input animation-save-values g/Any :array) ; Array of texture packer Atlas$AtlasAnimation protobuf messages in map format for each manually created animation.
   (input animation-ids g/Str :array) ; Array of the manually created animation ids.
-  (input animation-scenes Scene :array)
+  (input animation-scenes types/Scene :array)
   (input animation-build-errors g/Any :array)
 
   (input tpinfo g/Any)
@@ -1051,7 +1023,7 @@
   (input tpinfo-file-resource resource/Resource)
   (input tpinfo-page-image-content-generators g/Any) ; A vector with a content-generator for each page image png file. Each generates a BufferedImage.
   (input tpinfo-node-outline g/Any)
-  (input tpinfo-scene Scene)
+  (input tpinfo-scene types/Scene)
 
   (input tpinfo-image-infos-by-original-name OriginalName->ImageInfo)
   (output tpinfo-image-infos-by-original-name OriginalName->ImageInfo (gu/passthrough tpinfo-image-infos-by-original-name))
@@ -1119,7 +1091,7 @@
 
   (output save-value g/Any :cached produce-tpatlas-save-value)
   (output build-targets g/Any :cached produce-tpatlas-build-targets) ; Atlas node protocol.
-  (output scene g/Any :cached produce-tpatlas-scene)
+  (output scene types/Scene :cached produce-tpatlas-scene)
 
   (output own-build-errors g/Any
           (g/fnk [_node-id file rename-patterns id-counts]
