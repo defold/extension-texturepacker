@@ -598,24 +598,22 @@
                :children image-outlines}))))
 
 (defn- add-image-node-to-page-node [page-node ^TextureSetLayout$SourceImage source-image]
-  (let [original-name (.name source-image)
-        graph-id (g/node-id->graph-id page-node)]
-    (g/make-nodes graph-id [image-node [AtlasImageNode :original-name original-name]]
+  (let [original-name (.name source-image)]
+    (g/make-nodes [image-node [AtlasImageNode :original-name original-name]]
       (g/connect page-node :tpinfo-image-infos-by-original-name image-node :tpinfo-image-infos-by-original-name)
       (g/connect image-node :node-id+original-name page-node :image-node-id+original-names))))
 
 (defn- add-page-node-to-tpinfo-node [tpinfo-node page-image-resource ^TextureSetLayout$Page layout-page]
-  (let [graph-id (g/node-id->graph-id tpinfo-node)]
-    (g/make-nodes graph-id [page-node [AtlasPageNode :layout-page layout-page :image page-image-resource]]
-      (g/connect tpinfo-node :parent-dir-file page-node :tpinfo-parent-dir-file)
-      (g/connect tpinfo-node :image-infos-by-original-name page-node :tpinfo-image-infos-by-original-name)
-      (g/connect page-node :_node-id tpinfo-node :nodes)
-      (g/connect page-node :node-outline tpinfo-node :child-outlines)
-      (g/connect page-node :page-info tpinfo-node :page-infos)
-      (g/connect page-node :image-content-generator tpinfo-node :page-image-content-generators)
-      (g/connect page-node :build-errors tpinfo-node :page-build-errors)
-      (for [source-image (.images layout-page)]
-        (add-image-node-to-page-node page-node source-image)))))
+  (g/make-nodes [page-node [AtlasPageNode :layout-page layout-page :image page-image-resource]]
+    (g/connect tpinfo-node :parent-dir-file page-node :tpinfo-parent-dir-file)
+    (g/connect tpinfo-node :image-infos-by-original-name page-node :tpinfo-image-infos-by-original-name)
+    (g/connect page-node :_node-id tpinfo-node :nodes)
+    (g/connect page-node :node-outline tpinfo-node :child-outlines)
+    (g/connect page-node :page-info tpinfo-node :page-infos)
+    (g/connect page-node :image-content-generator tpinfo-node :page-image-content-generators)
+    (g/connect page-node :build-errors tpinfo-node :page-build-errors)
+    (for [source-image (.images layout-page)]
+      (add-image-node-to-page-node page-node source-image))))
 
 ;; Loads the .tpinfo file (api is default ddf loader)
 (defn- load-tpinfo-file [_project self resource tpinfo]
@@ -826,19 +824,15 @@
                               image-build-errors))))
 
 (defn- add-image-nodes-to-animation-node [animation-node image-names]
-  (let [graph-id (g/node-id->graph-id animation-node)]
-    (for [image-name image-names]
-      (g/make-nodes
-        graph-id
-        [atlas-image [AtlasImageNode :original-name image-name]]
-        (attach-image-to-animation animation-node atlas-image)))))
+  (for [image-name image-names]
+    (g/make-nodes
+      [atlas-image [AtlasImageNode :original-name image-name]]
+      (attach-image-to-animation animation-node atlas-image))))
 
 (defn- add-atlas-animation-node [atlas-node anim]
   {:pre [(map? anim)]} ; Atlas$AtlasAnimation in map format.
-  (let [graph-id (g/node-id->graph-id atlas-node)
-        image-names (:images anim)]
+  (let [image-names (:images anim)]
     (g/make-nodes
-      graph-id
       [animation-node AtlasAnimationNode]
       (concat
         (gu/set-properties-from-pb-map animation-node tpatlas-animation-pb-cls anim
