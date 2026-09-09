@@ -928,7 +928,7 @@
 
 (g/defnk produce-tpatlas-build-targets [_node-id resource build-errors tpinfo is-paged-atlas texture-set tpinfo-page-image-content-generators texture-profile build-settings]
   (g/precluding-errors build-errors
-    (let [project (project/get-project _node-id)
+    (let [project (project/get-project)
           workspace (project/workspace project)
           use-paged-texture (or (tpinfo-has-multiple-pages? tpinfo) is-paged-atlas)
           compress (:compress-textures? build-settings false)
