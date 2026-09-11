@@ -40,6 +40,7 @@
             [editor.util :as util]
             [editor.validation :as validation]
             [editor.workspace :as workspace]
+            [internal.graph.types :as gt]
             [internal.java :as java]
             [schema.core :as s]
             [util.coll :refer [pair]])
@@ -1109,9 +1110,10 @@
 (defn- selection->image [selection evaluation-context] (handler/adapt-single selection AtlasImageNode evaluation-context))
 
 (defn- image->owning-animation [basis image-node-id]
-  (when-some [owner-node-id (ffirst (g/targets-of basis image-node-id :node-id+original-name))]
-    (when (g/node-instance? basis AtlasAnimationNode owner-node-id)
-      owner-node-id)))
+  (when-let [arc (first (g/outputs basis image-node-id :node-id+original-name))]
+    (let [owner-node-id (gt/target-id arc)]
+      (when (g/node-instance? basis AtlasAnimationNode owner-node-id)
+        owner-node-id))))
 
 (defn- add-animation-group-handler [app-view atlas-node]
   (let [op-seq (gensym)
@@ -1204,10 +1206,10 @@
   [parent-node-id child-node-id parent->children ^long offset]
   (let [children (parent->children parent-node-id)
         new-children (vec-move children child-node-id offset)
-        connections (keep (fn [[source source-label target target-label]]
-                            (when (and (= source child-node-id)
-                                       (= target parent-node-id))
-                              [source-label target-label]))
+        connections (keep (fn [arc]
+                            (when (and (= (gt/source-id arc) child-node-id)
+                                       (= (gt/target-id arc) parent-node-id))
+                              [(gt/source-label arc) (gt/target-label arc)]))
                           (g/outputs child-node-id))]
     (g/transact
       (concat
