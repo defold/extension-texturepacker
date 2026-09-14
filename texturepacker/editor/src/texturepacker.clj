@@ -40,6 +40,7 @@
             [editor.util :as util]
             [editor.validation :as validation]
             [editor.workspace :as workspace]
+            [internal.graph.types :as gt]
             [internal.java :as java]
             [schema.core :as s]
             [util.coll :refer [pair]])
@@ -598,24 +599,22 @@
                :children image-outlines}))))
 
 (defn- add-image-node-to-page-node [page-node ^TextureSetLayout$SourceImage source-image]
-  (let [original-name (.name source-image)
-        graph-id (g/node-id->graph-id page-node)]
-    (g/make-nodes graph-id [image-node [AtlasImageNode :original-name original-name]]
+  (let [original-name (.name source-image)]
+    (g/make-nodes [image-node [AtlasImageNode :original-name original-name]]
       (g/connect page-node :tpinfo-image-infos-by-original-name image-node :tpinfo-image-infos-by-original-name)
       (g/connect image-node :node-id+original-name page-node :image-node-id+original-names))))
 
 (defn- add-page-node-to-tpinfo-node [tpinfo-node page-image-resource ^TextureSetLayout$Page layout-page]
-  (let [graph-id (g/node-id->graph-id tpinfo-node)]
-    (g/make-nodes graph-id [page-node [AtlasPageNode :layout-page layout-page :image page-image-resource]]
-      (g/connect tpinfo-node :parent-dir-file page-node :tpinfo-parent-dir-file)
-      (g/connect tpinfo-node :image-infos-by-original-name page-node :tpinfo-image-infos-by-original-name)
-      (g/connect page-node :_node-id tpinfo-node :nodes)
-      (g/connect page-node :node-outline tpinfo-node :child-outlines)
-      (g/connect page-node :page-info tpinfo-node :page-infos)
-      (g/connect page-node :image-content-generator tpinfo-node :page-image-content-generators)
-      (g/connect page-node :build-errors tpinfo-node :page-build-errors)
-      (for [source-image (.images layout-page)]
-        (add-image-node-to-page-node page-node source-image)))))
+  (g/make-nodes [page-node [AtlasPageNode :layout-page layout-page :image page-image-resource]]
+    (g/connect tpinfo-node :parent-dir-file page-node :tpinfo-parent-dir-file)
+    (g/connect tpinfo-node :image-infos-by-original-name page-node :tpinfo-image-infos-by-original-name)
+    (g/connect page-node :_node-id tpinfo-node :nodes)
+    (g/connect page-node :node-outline tpinfo-node :child-outlines)
+    (g/connect page-node :page-info tpinfo-node :page-infos)
+    (g/connect page-node :image-content-generator tpinfo-node :page-image-content-generators)
+    (g/connect page-node :build-errors tpinfo-node :page-build-errors)
+    (for [source-image (.images layout-page)]
+      (add-image-node-to-page-node page-node source-image))))
 
 ;; Loads the .tpinfo file (api is default ddf loader)
 (defn- load-tpinfo-file [_project self resource tpinfo]
@@ -826,19 +825,15 @@
                               image-build-errors))))
 
 (defn- add-image-nodes-to-animation-node [animation-node image-names]
-  (let [graph-id (g/node-id->graph-id animation-node)]
-    (for [image-name image-names]
-      (g/make-nodes
-        graph-id
-        [atlas-image [AtlasImageNode :original-name image-name]]
-        (attach-image-to-animation animation-node atlas-image)))))
+  (for [image-name image-names]
+    (g/make-nodes
+      [atlas-image [AtlasImageNode :original-name image-name]]
+      (attach-image-to-animation animation-node atlas-image))))
 
 (defn- add-atlas-animation-node [atlas-node anim]
   {:pre [(map? anim)]} ; Atlas$AtlasAnimation in map format.
-  (let [graph-id (g/node-id->graph-id atlas-node)
-        image-names (:images anim)]
+  (let [image-names (:images anim)]
     (g/make-nodes
-      graph-id
       [animation-node AtlasAnimationNode]
       (concat
         (gu/set-properties-from-pb-map animation-node tpatlas-animation-pb-cls anim
@@ -934,7 +929,7 @@
 
 (g/defnk produce-tpatlas-build-targets [_node-id resource build-errors tpinfo is-paged-atlas texture-set tpinfo-page-image-content-generators texture-profile build-settings]
   (g/precluding-errors build-errors
-    (let [project (project/get-project _node-id)
+    (let [project (project/get-project)
           workspace (project/workspace project)
           use-paged-texture (or (tpinfo-has-multiple-pages? tpinfo) is-paged-atlas)
           compress (:compress-textures? build-settings false)
@@ -1115,9 +1110,10 @@
 (defn- selection->image [selection evaluation-context] (handler/adapt-single selection AtlasImageNode evaluation-context))
 
 (defn- image->owning-animation [basis image-node-id]
-  (when-some [owner-node-id (ffirst (g/targets-of basis image-node-id :node-id+original-name))]
-    (when (g/node-instance? basis AtlasAnimationNode owner-node-id)
-      owner-node-id)))
+  (when-let [arc (first (g/outputs basis image-node-id :node-id+original-name))]
+    (let [owner-node-id (gt/target-id arc)]
+      (when (g/node-instance? basis AtlasAnimationNode owner-node-id)
+        owner-node-id))))
 
 (defn- add-animation-group-handler [app-view atlas-node]
   (let [op-seq (gensym)
@@ -1210,10 +1206,10 @@
   [parent-node-id child-node-id parent->children ^long offset]
   (let [children (parent->children parent-node-id)
         new-children (vec-move children child-node-id offset)
-        connections (keep (fn [[source source-label target target-label]]
-                            (when (and (= source child-node-id)
-                                       (= target parent-node-id))
-                              [source-label target-label]))
+        connections (keep (fn [arc]
+                            (when (and (= (gt/source-id arc) child-node-id)
+                                       (= (gt/target-id arc) parent-node-id))
+                              [(gt/source-label arc) (gt/target-label arc)]))
                           (g/outputs child-node-id))]
     (g/transact
       (concat

@@ -18,7 +18,7 @@ dependencies#0 = https://github.com/andsve/dirtylarry/archive/master.zip
 
 [library]
 include_dirs = texturepacker
-defold_min_version = 1.12.2
+defold_min_version = 1.14.0
 
 [graphics]
 max_draw_calls = 1024
