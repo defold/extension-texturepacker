@@ -617,12 +617,12 @@
       (add-image-node-to-page-node page-node source-image))))
 
 ;; Loads the .tpinfo file (api is default ddf loader)
-(defn- load-tpinfo-file [_project self resource tpinfo]
+(defn- load-tpinfo-file [{:keys [resolve-resource-fn]} {:keys [owner-resource] self :node-id tpinfo :source-value}]
   (let [pages (:pages tpinfo)
 
         page-image-resources
         (mapv (fn [page]
-                (workspace/resolve-resource resource (:name page)))
+                (resolve-resource-fn owner-resource (:name page)))
               pages)
 
         layout-pages
@@ -846,9 +846,9 @@
         (add-image-nodes-to-animation-node animation-node image-names)))))
 
 ;; .tpatlas file
-(defn- load-tpatlas-file [project self resource tpatlas]
+(defn- load-tpatlas-file [{:keys [project resolve-resource-fn]} {:keys [owner-resource] self :node-id tpatlas :source-value}]
   {:pre [(map? tpatlas)]} ; Atlas$AtlasDesc in map format.
-  (let [resolve-resource #(workspace/resolve-resource resource %)
+  (let [resolve-resource #(resolve-resource-fn owner-resource %)
         tx-data (concat
                   (g/connect project :build-settings self :build-settings)
                   (g/connect project :texture-profiles self :texture-profiles)
