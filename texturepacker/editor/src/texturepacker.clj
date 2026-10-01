@@ -19,6 +19,7 @@
             [editor.gl :as gl]
             [editor.gl.pass :as pass]
             [editor.gl.texture :as texture]
+            [editor.gl.vertex2 :as vtx]
             [editor.graph-util :as gu]
             [editor.handler :as handler]
             [editor.localization :as localization]
@@ -33,6 +34,7 @@
             [editor.resource-dialog :as resource-dialog]
             [editor.resource-node :as resource-node]
             [editor.scene-picking :as scene-picking]
+            [editor.shaders :as shaders]
             [editor.texture-set :as texture-set]
             [editor.texture-util :as texture-util]
             [editor.types :as types]
@@ -49,7 +51,7 @@
            [com.dynamo.gamesys.proto Tile$Playback]
            [com.dynamo.gamesys.proto TextureSetProto$TextureSet]
            [com.dynamo.graphics.proto Graphics$TextureProfile]
-           [com.jogamp.opengl GL2]
+           [com.jogamp.opengl GL3]
            [editor.pose Pose]
            [java.io File]
            [java.lang IllegalArgumentException]
@@ -234,22 +236,29 @@
       (texture/set-params {:min-filter gl/nearest
                            :mag-filter gl/nearest})))
 
-(defn- render-image-geometry [^GL2 gl world-positions color]
-  (let [[^double cr ^double cg ^double cb ^double ca] color]
-    (.glColor4d gl cr cg cb ca)
-    (.glBegin gl GL2/GL_TRIANGLES)
-    (doseq [[^double x ^double y ^double z] world-positions]
-      (.glVertex3d gl x y z))
-    (.glEnd gl)))
+(defn- render-image-geometry [^GL3 gl render-args world-positions color]
+  (when (pos? (count world-positions))
+    ;; Positions already include page offsets. Preserve the unmodified color for
+    ;; both outlines and picking, without applying the world transform again.
+    (let [shader shaders/basic-color-straight-alpha-world-space
+          vertex-buffer (vtx/make-vertex-buffer (shaders/vertex-description shader) :stream (count world-positions))
+          buffer (vtx/buf vertex-buffer)
+          [r g b a] color
+          vertex-binding (vtx/use-with ::image-geometry vertex-buffer shader)]
+      (doseq [[x y z] world-positions]
+        (vtx/buf-push-floats! buffer [x y z r g b a]))
+      (vtx/flip! vertex-buffer)
+      (gl/with-gl-bindings gl render-args [shader vertex-binding]
+        (gl/gl-draw-arrays gl GL3/GL_TRIANGLES 0 (count vertex-buffer))))))
 
 (defn- render-image-outline
-  [^GL2 gl renderable override-color]
+  [^GL3 gl render-args renderable override-color]
   (let [world-positions (-> renderable :user-data :world-positions)
         color (or override-color (colors/renderable-outline-color renderable))]
-    (render-image-geometry gl world-positions color)))
+    (render-image-geometry gl render-args world-positions color)))
 
 (defn- render-image-outlines
-  [^GL2 gl render-args renderables _renderable-count]
+  [^GL3 gl render-args renderables _renderable-count]
   (assert (= (:pass render-args) pass/outline))
   (let [{:keys [default playing selected]}
         (group-by (fn [{:keys [selected updatable user-data]}]
@@ -266,21 +275,21 @@
                       :default))
                   renderables)]
     (doseq [renderable default]
-      (render-image-outline gl renderable nil))
+      (render-image-outline gl render-args renderable nil))
     (doseq [renderable playing]
-      (render-image-outline gl renderable colors/defold-pink))
+      (render-image-outline gl render-args renderable colors/defold-pink))
     (doseq [renderable selected]
-      (render-image-outline gl renderable nil))))
+      (render-image-outline gl render-args renderable nil))))
 
 (defn- render-image-selection
-  [^GL2 gl render-args renderables renderable-count]
+  [^GL3 gl render-args renderables renderable-count]
   (assert (= (:pass render-args) pass/selection))
   (assert (= renderable-count 1))
   (let [renderable (first renderables)
         picking-id (:picking-id renderable)
         id-color (scene-picking/picking-id->color picking-id)
         world-positions (-> renderable :user-data :world-positions)]
-    (render-image-geometry gl world-positions id-color)))
+    (render-image-geometry gl render-args world-positions id-color)))
 
 (defn- point->vec3 [^Point3d point]
   (vector-of :double (.x point) (.y point) (.z point)))
@@ -715,7 +724,7 @@
                     original-name)
                   image-node-id+original-names)))
 
-(defn- render-animation [^GL2 gl render-args renderables _renderable-count]
+(defn- render-animation [^GL3 gl render-args renderables _renderable-count]
   (texture-set/render-animation-overlay gl render-args renderables))
 
 (g/defnk produce-animation-updatable [_node-id id anim-data]
