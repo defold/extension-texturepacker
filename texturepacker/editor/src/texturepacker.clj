@@ -378,8 +378,8 @@
                                    height (double (:height untrimmed-size))
                                    untrimmed-size [width height]
                                    pivot (if pivot
-                                          [(:x pivot) (:y pivot)]
-                                          [(/ width 2.0) (/ height 2.0)])]
+                                           [(:x pivot) (:y pivot)]
+                                           [(/ width 2.0) (/ height 2.0)])]
                                (pair original-name
                                      {:pivot pivot
                                       :size size
@@ -441,7 +441,7 @@
   (output build-errors g/Any
           (g/fnk [_node-id page-build-errors]
             (g/package-errors _node-id
-                              page-build-errors)))
+              page-build-errors)))
 
   (output node-outline outline/OutlineData :cached
           (g/fnk [_node-id child-outlines build-errors]
@@ -583,7 +583,7 @@
   (output build-errors g/Any
           (g/fnk [_node-id image-resource]
             (g/package-errors _node-id
-                              (validate-page-image _node-id image-resource))))
+              (validate-page-image _node-id image-resource))))
 
   (output image-outlines g/Any :cached
           (g/fnk [image-node-id+original-names]
@@ -817,8 +817,8 @@
   (output own-build-errors g/Any
           (g/fnk [_node-id fps id id-counts]
             (g/package-errors _node-id
-                              (validate-animation-id _node-id id id-counts)
-                              (validate-animation-fps _node-id fps))))
+              (validate-animation-id _node-id id id-counts)
+              (validate-animation-fps _node-id fps))))
 
   (output image-build-errors g/Any :cached
           (g/fnk [image-node-id+original-names tpinfo-image-infos-by-original-name]
@@ -830,8 +830,8 @@
   (output build-errors g/Any :cached
           (g/fnk [_node-id own-build-errors image-build-errors]
             (g/package-errors _node-id
-                              own-build-errors
-                              image-build-errors))))
+              own-build-errors
+              image-build-errors))))
 
 (defn- add-image-nodes-to-animation-node [animation-node image-names]
   (for [image-name image-names]
@@ -1100,16 +1100,16 @@
   (output own-build-errors g/Any
           (g/fnk [_node-id file rename-patterns id-counts]
             (g/package-errors _node-id
-                              (validate-tpinfo-file _node-id file)
-                              (validate-rename-patterns _node-id rename-patterns)
-                              (validate-unique-ids _node-id id-counts))))
+              (validate-tpinfo-file _node-id file)
+              (validate-rename-patterns _node-id rename-patterns)
+              (validate-unique-ids _node-id id-counts))))
 
   (output build-errors g/Any
           (g/fnk [_node-id animation-build-errors own-build-errors tpinfo-build-errors]
             (g/package-errors _node-id
-                              own-build-errors
-                              animation-build-errors
-                              tpinfo-build-errors))))
+              own-build-errors
+              animation-build-errors
+              tpinfo-build-errors))))
 
 ;; *****************************************************************************
 ;; Outline handlers
