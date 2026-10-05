@@ -1238,18 +1238,18 @@
          (g/node-value animation-node-id :image-node-id+original-names evaluation-context))))
 
 (defn- move-animation-image! [selection ^long offset]
-  (g/let-ec [basis (:basis evaluation-context)
+  (g/let-ec [basis-ref (:basis-ref evaluation-context)
              image-node-id (selection->image selection evaluation-context)
-             animation-node-id (image->owning-animation basis image-node-id)]
+             animation-node-id (image->owning-animation @basis-ref image-node-id)]
     (move-node! animation-node-id image-node-id animation->image-node-ids offset)))
 
-(defn- move-active? [selection {:keys [basis] :as evaluation-context}]
+(defn- move-active? [selection {:keys [basis-ref] :as evaluation-context}]
   (some->> (selection->image selection evaluation-context)
-           (image->owning-animation basis)))
+           (image->owning-animation @basis-ref)))
 
-(defn- move-enabled? [selection ^long offset {:keys [basis] :as evaluation-context}]
+(defn- move-enabled? [selection ^long offset {:keys [basis-ref] :as evaluation-context}]
   (let [image-node-id (selection->image selection evaluation-context)
-        animation-node-id (image->owning-animation basis image-node-id)
+        animation-node-id (image->owning-animation @basis-ref image-node-id)
         animation-image-node-ids (animation->image-node-ids animation-node-id evaluation-context)
         animation-image-index (.indexOf animation-image-node-ids image-node-id)]
     (<= 0 (+ animation-image-index offset) (dec (.size animation-image-node-ids)))))
